@@ -56,19 +56,65 @@
             style="padding:12px; border:1px solid #d1d5db; border-radius:8px;"
           />
 
-          <label>
-            Admin JWT Token
-          </label>
-          <textarea
-            id="adminToken"
-            rows="4"
-            placeholder="Paste admin access token"
-            style="padding:12px; border:1px solid #d1d5db; border-radius:8px;"
-          ></textarea>
+<label>
+  Admin Email
+</label>
+<input
+  id="adminEmail"
+  type="email"
+  placeholder="admin@iadme.app"
+  autocomplete="username"
+  style="padding:12px; border:1px solid #d1d5db; border-radius:8px;"
+/>
 
-          <button class="button" id="saveConfigBtn">
-            Save Configuration
-          </button>
+<label>
+  Admin Password
+</label>
+<input
+  id="adminPassword"
+  type="password"
+  placeholder="Enter admin password"
+  autocomplete="current-password"
+  style="padding:12px; border:1px solid #d1d5db; border-radius:8px;"
+/>
+
+<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;">
+  <button class="button" id="adminLoginBtn" type="button">
+    Login
+  </button>
+
+  <button
+    class="button"
+    id="adminLogoutBtn"
+    type="button"
+    style="display:none;background:#334155;box-shadow:none;"
+  >
+    Logout
+  </button>
+
+  <button
+    class="button"
+    id="saveConfigBtn"
+    type="button"
+    style="background:#64748b;box-shadow:none;"
+  >
+    Save Environment
+  </button>
+</div>
+
+<p
+  id="adminLoginStatus"
+  style="margin-top:4px;color:#64748b;font-size:14px;"
+>
+  Not logged in.
+</p>
+
+<textarea
+  id="adminToken"
+  rows="3"
+  placeholder="Admin access token appears here after login"
+  style="display:none;padding:12px; border:1px solid #d1d5db; border-radius:8px;"
+></textarea>
         </div>
       </div>
 
@@ -131,15 +177,24 @@
         <pre id="auditOutput" style="margin-top:20px; overflow:auto;"></pre>
       </div>
 
-      <div class="page-card" style="margin-top:24px;">
-        <h3>Videos</h3>
+<div class="page-card" style="margin-top:24px;">
+  <h3>Video Management</h3>
 
-        <button class="button" id="loadVideosBtn">
-          Load Videos
-        </button>
+  <p>
+    Review videos, playback status, visibility, moderation state and perform delete/restore actions.
+  </p>
 
-        <pre id="videosOutput" style="margin-top:20px; overflow:auto;"></pre>
-      </div>
+  <button class="button" id="loadVideosBtn">
+    Load Videos
+  </button>
+
+  <div id="videosOutput" style="margin-top:20px; overflow:auto;"></div>
+
+  <div id="selectedVideoPanel" style="display:none;margin-top:24px;padding:20px;border:1px solid #e5e7eb;border-radius:14px;background:#f8fafc;">
+    <h4 style="font-size:20px;margin-bottom:12px;">Selected Video Details</h4>
+    <div id="selectedVideoOutput"></div>
+  </div>
+</div>
 
       <div class="page-card" style="margin-top:24px;">
         <h3>Reported Video Comments</h3>
@@ -148,18 +203,32 @@
           Load Comments
         </button>
 
-        <pre id="commentsOutput" style="margin-top:20px; overflow:auto;"></pre>
+        <div id="commentsOutput" style="margin-top:20px; overflow:auto;"></div>
+
+<div id="selectedCommentPanel" style="display:none;margin-top:24px;padding:20px;border:1px solid #e5e7eb;border-radius:14px;background:#f8fafc;">
+  <h4 style="font-size:20px;margin-bottom:12px;">Selected Comment Details</h4>
+  <div id="selectedCommentOutput"></div>
+</div>
       </div>
 
-      <div class="page-card" style="margin-top:24px;">
-        <h3>Users</h3>
+<div class="page-card" style="margin-top:24px;">
+  <h3>User Management</h3>
 
-        <button class="button" id="loadUsersBtn">
-          Load Users
-        </button>
+  <p>
+    Review users, account status, contact verification and moderation actions.
+  </p>
 
-        <pre id="usersOutput" style="margin-top:20px; overflow:auto;"></pre>
-      </div>
+  <button class="button" id="loadUsersBtn">
+    Load Users
+  </button>
+
+  <div id="usersOutput" style="margin-top:20px; overflow:auto;"></div>
+
+  <div id="selectedUserPanel" style="display:none;margin-top:24px;padding:20px;border:1px solid #e5e7eb;border-radius:14px;background:#f8fafc;">
+    <h4 style="font-size:20px;margin-bottom:12px;">Selected User Details</h4>
+    <div id="selectedUserOutput"></div>
+  </div>
+</div>
 
     </div>
   </main>

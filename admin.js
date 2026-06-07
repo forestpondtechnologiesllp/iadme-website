@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
   env: "iadme_admin_env",
   baseUrl: "iadme_admin_base_url",
   token: "iadme_admin_token",
+  email: "iadme_admin_email",
 };
 
 const getElement = (id) => document.getElementById(id);
@@ -54,6 +55,88 @@ const requestAdminApi = async (path, options = {}) => {
   return body;
 };
 
+const setLoginStatus = (message, isLoggedIn = false) => {
+  const statusEl = getElement("adminLoginStatus");
+  const loginBtn = getElement("adminLoginBtn");
+  const logoutBtn = getElement("adminLogoutBtn");
+
+  if (statusEl) {
+    statusEl.textContent = message;
+    statusEl.style.color = isLoggedIn ? "#16a34a" : "#64748b";
+  }
+
+  if (loginBtn) loginBtn.style.display = isLoggedIn ? "none" : "inline-flex";
+  if (logoutBtn) logoutBtn.style.display = isLoggedIn ? "inline-flex" : "none";
+};
+
+const extractAccessToken = (data) =>
+  data?.accessToken ||
+  data?.token ||
+  data?.auth?.accessToken ||
+  data?.session?.accessToken ||
+  data?.data?.accessToken ||
+  "";
+
+const loginAdmin = async () => {
+  const baseUrl = getElement("baseUrl")?.value?.trim()?.replace(/\/$/, "");
+  const email = getElement("adminEmail")?.value?.trim();
+  const password = getElement("adminPassword")?.value || "";
+  const tokenInput = getElement("adminToken");
+  const loginBtn = getElement("adminLoginBtn");
+
+  if (!baseUrl || !email || !password) {
+    alert("API Base URL, admin email and password are required");
+    return;
+  }
+
+  try {
+    if (loginBtn) {
+      loginBtn.disabled = true;
+      loginBtn.textContent = "Logging in...";
+    }
+
+    const response = await fetch(`${baseUrl}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      throw new Error(data?.error?.message || data?.message || `Login failed with ${response.status}`);
+    }
+
+    const token = extractAccessToken(data);
+    if (!token) throw new Error("Login succeeded but access token was not found");
+
+    tokenInput.value = token;
+
+    localStorage.setItem(STORAGE_KEYS.baseUrl, baseUrl);
+    localStorage.setItem(STORAGE_KEYS.email, email);
+    localStorage.setItem(STORAGE_KEYS.token, token);
+
+    getElement("adminPassword").value = "";
+    setLoginStatus(`Logged in as ${email}`, true);
+    await loadDashboardMetrics();
+  } catch (error) {
+    setLoginStatus("Login failed.", false);
+    alert(error.message);
+  } finally {
+    if (loginBtn) {
+      loginBtn.disabled = false;
+      loginBtn.textContent = "Login";
+    }
+  }
+};
+
+const logoutAdmin = () => {
+  localStorage.removeItem(STORAGE_KEYS.token);
+  getElement("adminToken").value = "";
+  getElement("adminPassword").value = "";
+  setLoginStatus("Not logged in.", false);
+};
+
 const writeOutput = (id, value) => {
   const el = getElement(id);
   if (!el) return;
@@ -68,6 +151,46 @@ const reportQueueState = {
   sortKey: "createdAt",
   sortDirection: "desc",
   expanded: true,
+};
+
+const auditState = {
+  logs: [],
+  sortKey: "createdAt",
+  sortDirection: "desc",
+};
+
+const videoManagementState = {
+  videos: [],
+  page: 1,
+  pageSize: 10,
+  sortKey: "createdAt",
+  sortDirection: "desc",
+  expanded: true,
+  search: "",
+  visibility: "all",
+  deleted: "all",
+};
+
+const userManagementState = {
+  users: [],
+  page: 1,
+  pageSize: 10,
+  sortKey: "createdAt",
+  sortDirection: "desc",
+  expanded: true,
+  search: "",
+  status: "all",
+};
+
+const commentManagementState = {
+  comments: [],
+  page: 1,
+  pageSize: 10,
+  sortKey: "createdAt",
+  sortDirection: "desc",
+  expanded: true,
+  search: "",
+  status: "all",
 };
 
 const escapeHtml = (value) =>
@@ -127,49 +250,1175 @@ const withLoadingButton = async (buttonId, loadingText, fn) => {
 const loadAuditLogs = async () => {
   try {
     await withLoadingButton("loadAuditBtn", "Loading Audit Logs...", async () => {
-      writeOutput("auditOutput", "Loading audit logs...");
+      const container = getElement("auditOutput");
+
+      if (container) {
+        container.innerHTML = "Loading audit logs...";
+      }
+
       const data = await requestAdminApi("/admin/audit");
-      writeOutput("auditOutput", data);
+      auditState.logs = data?.auditLogs || [];
+      renderAuditTable();
     });
   } catch (error) {
     writeOutput("auditOutput", error.message);
   }
 };
 
+const renderAuditTable = () => {
+  const container = getElement("auditOutput");
+  if (!container) return;
+  container.style.fontFamily = "Inter, Arial, sans-serif";
+  container.style.whiteSpace = "normal";
+  container.style.overflow = "visible";
+
+  const auditLogs = [...auditState.logs].sort((a, b) => {
+    const aValue = auditState.sortKey === "createdAt"
+      ? new Date(a.createdAt ?? 0).getTime()
+      : String(a[auditState.sortKey] ?? "").toLowerCase();
+
+    const bValue = auditState.sortKey === "createdAt"
+      ? new Date(b.createdAt ?? 0).getTime()
+      : String(b[auditState.sortKey] ?? "").toLowerCase();
+
+    if (aValue < bValue) return auditState.sortDirection === "asc" ? -1 : 1;
+    if (aValue > bValue) return auditState.sortDirection === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  if (auditLogs.length === 0) {
+    container.innerHTML = "<p>No audit records found.</p>";
+    return;
+  }
+
+  const sortIcon = (key) => {
+    if (auditState.sortKey !== key) return "↕";
+    return auditState.sortDirection === "asc" ? "↑" : "↓";
+  };
+
+  const rows = auditLogs
+    .map((log, index) => {
+      const rowBackground = index % 2 === 0 ? "#ffffff" : "#f8fafc";
+      const actionLabel = String(log.actionType ?? "").replaceAll("_", " ").toLowerCase();
+      const entityLabel = String(log.entityType ?? "").replaceAll("_", " ").toLowerCase();
+
+      return `
+        <tr style="background:${rowBackground};">
+          <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;white-space:nowrap;color:#334155;font-size:14px;">
+            ${escapeHtml(formatDateTime(log.createdAt))}
+          </td>
+          <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;">
+            <span style="display:inline-block;padding:5px 10px;border-radius:999px;background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;font-weight:800;font-size:12px;text-transform:capitalize;white-space:nowrap;">
+              ${escapeHtml(actionLabel)}
+            </span>
+          </td>
+          <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;color:#334155;font-size:14px;text-transform:capitalize;white-space:nowrap;">
+            ${escapeHtml(entityLabel)}
+          </td>
+          <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;color:#334155;font-size:14px;" title="${escapeHtml(log.entityId)}">
+            ${escapeHtml(shortText(log.entityId, 28))}
+          </td>
+          <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;color:#334155;font-size:14px;">
+            ${escapeHtml(log.reason || "-")}
+          </td>
+          <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;white-space:nowrap;">
+            <button onclick="copyAuditEntityId('${escapeHtml(log.entityId || "")}')" style="padding:7px 10px;border-radius:8px;border:1px solid #64748b;background:#fff;color:#334155;font-weight:800;cursor:pointer;font-size:12px;">
+              Copy ID
+            </button>
+            <button onclick="showAuditMetadata('${escapeHtml(log.id || "")}')" style="padding:7px 10px;border-radius:8px;border:1px solid #8b5cf6;background:#fff;color:#5b21b6;font-weight:800;cursor:pointer;margin-left:6px;font-size:12px;">
+              Metadata
+            </button>
+          </td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  container.innerHTML = `
+    <div style="margin-top:16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;">
+      <div style="font-weight:800;color:#334155;font-size:15px;">
+        Showing ${auditLogs.length} audit records
+      </div>
+    </div>
+
+    <div style="margin-top:14px;overflow:auto;border:1px solid #dbe3ef;border-radius:14px;">
+      <table style="width:100%;border-collapse:collapse;min-width:980px;font-family:Inter, Arial, sans-serif;line-height:1.35;">
+        <thead>
+          <tr style="background:#f8fafc;">
+            <th onclick="sortAudit('createdAt')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;font-size:14px;color:#0f172a;">Time ${sortIcon("createdAt")}</th>
+            <th onclick="sortAudit('actionType')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;font-size:14px;color:#0f172a;">Action ${sortIcon("actionType")}</th>
+            <th onclick="sortAudit('entityType')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;font-size:14px;color:#0f172a;">Entity ${sortIcon("entityType")}</th>
+            <th onclick="sortAudit('entityId')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;font-size:14px;color:#0f172a;">Entity ID ${sortIcon("entityId")}</th>
+            <th onclick="sortAudit('reason')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;font-size:14px;color:#0f172a;">Reason ${sortIcon("reason")}</th>
+            <th style="text-align:left;padding:12px;border:1px solid #e5e7eb;font-size:14px;color:#0f172a;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+};
+
 const loadVideos = async () => {
   try {
     await withLoadingButton("loadVideosBtn", "Loading Videos...", async () => {
-      writeOutput("videosOutput", "Loading videos...");
+      const container = getElement("videosOutput");
+
+      if (container) {
+        container.innerHTML = "Loading videos...";
+      }
+
       const data = await requestAdminApi("/admin/videos");
-      writeOutput("videosOutput", data);
+      videoManagementState.videos = data?.videos || [];
+      videoManagementState.page = 1;
+      videoManagementState.expanded = true;
+      renderVideosTable();
     });
   } catch (error) {
     writeOutput("videosOutput", error.message);
   }
 };
 
+const getVideoSortValue = (video, key) => {
+  if (key === "createdAt") return new Date(video.createdAt ?? 0).getTime();
+  if (key === "deleted") return video.deletedAt ? 1 : 0;
+  return String(video[key] ?? "").toLowerCase();
+};
+
+const renderVideosTable = () => {
+  const container = getElement("videosOutput");
+  if (!container) return;
+
+  const videos = [...videoManagementState.videos].sort((a, b) => {
+    const aValue = getVideoSortValue(a, videoManagementState.sortKey);
+    const bValue = getVideoSortValue(b, videoManagementState.sortKey);
+
+    if (aValue < bValue) return videoManagementState.sortDirection === "asc" ? -1 : 1;
+    if (aValue > bValue) return videoManagementState.sortDirection === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  if (!videoManagementState.expanded) {
+    container.innerHTML = `
+      <div style="margin-top:14px;display:flex;align-items:center;justify-content:space-between;border:1px solid #e5e7eb;border-radius:14px;padding:16px;background:#f8fafc;">
+        <strong>${videos.length} video records hidden</strong>
+        <button onclick="toggleVideosExpanded()" style="padding:10px 14px;border-radius:10px;border:1px solid #6d28d9;background:#fff;color:#5b21b6;font-weight:800;cursor:pointer;">
+          Open Records
+        </button>
+      </div>
+    `;
+    return;
+  }
+
+  if (videos.length === 0) {
+    container.innerHTML = "<p>No videos found.</p>";
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(videos.length / videoManagementState.pageSize));
+  videoManagementState.page = Math.min(videoManagementState.page, totalPages);
+
+  const startIndex = (videoManagementState.page - 1) * videoManagementState.pageSize;
+  const pageVideos = videos.slice(startIndex, startIndex + videoManagementState.pageSize);
+
+  const sortIcon = (key) => {
+    if (videoManagementState.sortKey !== key) return "↕";
+    return videoManagementState.sortDirection === "asc" ? "↑" : "↓";
+  };
+
+  const rows = pageVideos
+    .map((video, index) => {
+      const rowBackground = index % 2 === 0 ? "#ffffff" : "#f8fafc";
+      const isDeleted = Boolean(video.deletedAt);
+      const statusColor = isDeleted ? "#dc2626" : video.playbackStatus === "ready" ? "#16a34a" : "#f97316";
+      const thumbnail = video.thumbnailUrl
+        ? `<img src="${escapeHtml(video.thumbnailUrl)}" alt="thumbnail" style="width:70px;height:90px;object-fit:cover;border-radius:10px;background:#0f172a;" />`
+        : `<div style="width:70px;height:90px;display:grid;place-items:center;border-radius:10px;background:#e5e7eb;color:#64748b;font-size:12px;">No image</div>`;
+
+      return `
+        <tr style="background:${rowBackground};text-align:center;">
+          <td style="padding:10px;border:1px solid #e5e7eb;vertical-align:top;">${thumbnail}</td>
+          <td style="padding:10px;border:1px solid #e5e7eb;vertical-align:top;">
+            <strong>${escapeHtml(shortText(video.title, 42))}</strong><br>
+            <span style="color:#64748b;font-size:12px;" title="${escapeHtml(video.id)}">${escapeHtml(shortText(video.id, 28))}</span>
+          </td>
+          <td style="padding:10px;border:1px solid #e5e7eb;vertical-align:top;">
+            ${escapeHtml(shortText(video.ownerEmail, 32))}<br>
+            <span style="color:#64748b;font-size:12px;">${escapeHtml(video.ownerStatus)}</span>
+          </td>
+          <td style="padding:10px;border:1px solid #e5e7eb;vertical-align:top;">
+            <span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#f8fafc;color:${statusColor};border:1px solid #e5e7eb;font-weight:800;font-size:12px;">
+              ${isDeleted ? "deleted" : escapeHtml(video.playbackStatus)}
+            </span>
+          </td>
+          <td style="padding:10px;border:1px solid #e5e7eb;vertical-align:top;">${escapeHtml(video.visibility)}</td>
+          <td style="padding:10px;border:1px solid #e5e7eb;vertical-align:top;white-space:nowrap;">${escapeHtml(formatDateTime(video.createdAt))}</td>
+          <td style="padding:10px;border:1px solid #e5e7eb;vertical-align:top;white-space:nowrap;">
+<button onclick="showVideoDetails('${escapeHtml(video.id)}')" style="padding:8px 12px;border-radius:9px;border:1px solid #8b5cf6;background:#fff;color:#5b21b6;font-weight:800;cursor:pointer;">
+  View
+</button>
+<button onclick="copyVideoId('${escapeHtml(video.id)}')" style="padding:8px 12px;border-radius:9px;border:1px solid #64748b;background:#fff;color:#334155;font-weight:800;cursor:pointer;margin-left:6px;">
+  Copy ID
+</button>
+            ${isDeleted
+              ? `<button onclick="restoreVideoFromTable('${escapeHtml(video.id)}')" style="padding:8px 12px;border-radius:9px;border:1px solid #16a34a;background:#16a34a;color:white;font-weight:800;cursor:pointer;margin-left:6px;">Restore</button>`
+              : `<button onclick="deleteVideoFromTable('${escapeHtml(video.id)}')" style="padding:8px 12px;border-radius:9px;border:1px solid #dc2626;background:#dc2626;color:white;font-weight:800;cursor:pointer;margin-left:6px;">Delete</button>`
+            }
+          </td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  container.innerHTML = `
+    <div style="margin-top:16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;">
+      <div style="display:flex;gap:10px;align-items:center;">
+        <label style="font-weight:700;">Show</label>
+        <select onchange="changeVideoPageSize(this.value)" style="padding:10px;border:1px solid #d1d5db;border-radius:10px;">
+<option value="10" ${videoManagementState.pageSize === 10 ? "selected" : ""}>10</option>
+<option value="20" ${videoManagementState.pageSize === 20 ? "selected" : ""}>20</option>
+<option value="50" ${videoManagementState.pageSize === 50 ? "selected" : ""}>50</option>
+<option value="100" ${videoManagementState.pageSize === 100 ? "selected" : ""}>100</option>
+        </select>
+        <span>entries</span>
+      </div>
+
+      <button onclick="toggleVideosExpanded()" style="padding:10px 14px;border-radius:10px;border:1px solid #6d28d9;background:#fff;color:#5b21b6;font-weight:800;cursor:pointer;">
+        Close Records
+      </button>
+    </div>
+
+    <div style="margin-top:14px;overflow:auto;border:1px solid #dbe3ef;border-radius:14px;">
+      <table style="width:100%;border-collapse:collapse;min-width:1100px;">
+        <thead>
+          <tr style="background:#f8fafc;">
+            <th style="text-align:left;padding:12px;border:1px solid #e5e7eb;">Thumbnail</th>
+            <th onclick="sortVideos('title')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">Title ${sortIcon("title")}</th>
+            <th onclick="sortVideos('ownerEmail')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">Owner ${sortIcon("ownerEmail")}</th>
+            <th onclick="sortVideos('deleted')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">Status ${sortIcon("deleted")}</th>
+            <th onclick="sortVideos('visibility')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">Visibility ${sortIcon("visibility")}</th>
+            <th onclick="sortVideos('createdAt')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">Created ${sortIcon("createdAt")}</th>
+            <th style="text-align:left;padding:12px;border:1px solid #e5e7eb;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+      <span>Showing ${startIndex + 1} to ${Math.min(startIndex + videoManagementState.pageSize, videos.length)} of ${videos.length} videos</span>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button onclick="changeVideoPage(${videoManagementState.page - 1})" ${videoManagementState.page <= 1 ? "disabled" : ""} style="padding:8px 12px;border-radius:8px;border:1px solid #d1d5db;">Prev</button>
+        <strong>Page ${videoManagementState.page} / ${totalPages}</strong>
+        <button onclick="changeVideoPage(${videoManagementState.page + 1})" ${videoManagementState.page >= totalPages ? "disabled" : ""} style="padding:8px 12px;border-radius:8px;border:1px solid #d1d5db;">Next</button>
+      </div>
+    </div>
+  `;
+};
+
+window.sortVideos = (key) => {
+  if (videoManagementState.sortKey === key) {
+    videoManagementState.sortDirection = videoManagementState.sortDirection === "asc" ? "desc" : "asc";
+  } else {
+    videoManagementState.sortKey = key;
+    videoManagementState.sortDirection = key === "createdAt" ? "desc" : "asc";
+  }
+
+  videoManagementState.page = 1;
+  renderVideosTable();
+};
+
+window.sortAudit = (key) => {
+  if (auditState.sortKey === key) {
+    auditState.sortDirection = auditState.sortDirection === "asc" ? "desc" : "asc";
+  } else {
+    auditState.sortKey = key;
+    auditState.sortDirection = key === "createdAt" ? "desc" : "asc";
+  }
+
+  renderAuditTable();
+};
+
+window.copyAuditEntityId = async (entityId) => {
+  try {
+    await navigator.clipboard.writeText(entityId);
+    alert("Entity ID copied");
+  } catch {
+    prompt("Copy Entity ID", entityId);
+  }
+};
+
+window.showAuditMetadata = (auditLogId) => {
+  const log = auditState.logs.find((item) => item.id === auditLogId);
+  if (!log) {
+    alert("Audit log not found");
+    return;
+  }
+
+  alert(formatJson({
+    id: log.id,
+    adminUserId: log.adminUserId,
+    actionType: log.actionType,
+    entityType: log.entityType,
+    entityId: log.entityId,
+    reason: log.reason,
+    metadata: log.metadata,
+    createdAt: log.createdAt,
+  }));
+};
+
+window.copyVideoId = async (videoId) => {
+  try {
+    await navigator.clipboard.writeText(videoId);
+    alert("Video ID copied");
+  } catch {
+    prompt("Copy Video ID", videoId);
+  }
+};
+
+window.changeVideoPage = (page) => {
+  const totalPages = Math.max(1, Math.ceil(videoManagementState.videos.length / videoManagementState.pageSize));
+  videoManagementState.page = Math.min(Math.max(1, Number(page)), totalPages);
+  renderVideosTable();
+};
+
+window.changeVideoPageSize = (pageSize) => {
+  videoManagementState.pageSize = Number(pageSize) || 50;
+  videoManagementState.page = 1;
+  renderVideosTable();
+};
+
+window.toggleVideosExpanded = () => {
+  videoManagementState.expanded = !videoManagementState.expanded;
+  renderVideosTable();
+};
+
+window.showVideoDetails = async (videoId) => {
+  const panel = getElement("selectedVideoPanel");
+  const output = getElement("selectedVideoOutput");
+
+  if (!panel || !output) return;
+
+  panel.style.display = "block";
+  output.innerHTML = "Loading video details...";
+
+  try {
+    const video = await requestAdminApi(`/admin/videos/${videoId}`);
+    renderSelectedVideoDetails(videoId, video);
+  } catch (error) {
+    output.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
+  }
+};
+
+const renderSelectedVideoDetails = (videoId, video) => {
+  const output = getElement("selectedVideoOutput");
+  if (!output) return;
+
+  const isDeleted = Boolean(video.video?.deletedAt);
+  const playbackUrl = video.video?.hlsUrl || video.video?.playbackUrl || "";
+  const thumbnailUrl = video.video?.thumbnailUrl || "";
+
+  output.innerHTML = `
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:16px;">
+      <strong style="font-size:18px;color:#5b21b6;">Video ${escapeHtml(shortText(videoId, 18))}</strong>
+      <button onclick="closeSelectedVideoPanel()" style="padding:8px 12px;border-radius:9px;border:1px solid #6d28d9;background:#6d28d9;color:white;font-weight:800;cursor:pointer;">
+        Close Details ×
+      </button>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px;">
+      <button onclick="showVideoDetails('${escapeHtml(videoId)}')" style="padding:9px 13px;border-radius:10px;border:1px solid #8b5cf6;background:#fff;color:#5b21b6;font-weight:800;cursor:pointer;">
+        Refresh Details
+      </button>
+      ${isDeleted
+        ? `<button onclick="restoreVideoFromTable('${escapeHtml(videoId)}')" style="padding:9px 13px;border-radius:10px;border:1px solid #16a34a;background:#16a34a;color:white;font-weight:800;cursor:pointer;">Restore Video</button>`
+        : `<button onclick="deleteVideoFromTable('${escapeHtml(videoId)}')" style="padding:9px 13px;border-radius:10px;border:1px solid #dc2626;background:#dc2626;color:white;font-weight:800;cursor:pointer;">Delete Video</button>`
+      }
+    </div>
+
+    <div style="display:grid;grid-template-columns:minmax(280px, 420px) 1fr;gap:18px;align-items:start;">
+      <div style="border:1px solid #e5e7eb;border-radius:16px;background:#020617;padding:12px;">
+        ${playbackUrl
+          ? `<video controls playsinline preload="metadata" poster="${escapeHtml(thumbnailUrl)}" src="${escapeHtml(playbackUrl)}" style="width:100%;max-height:520px;border-radius:12px;background:#000;display:block;"></video>`
+          : `<div style="min-height:260px;display:grid;place-items:center;color:#cbd5e1;background:#0f172a;border-radius:12px;">No playback URL available</div>`
+        }
+      </div>
+
+      <div style="display:grid;gap:16px;">
+        <div style="border:1px solid #e5e7eb;border-radius:12px;background:white;padding:16px;">
+          <h4 style="margin-bottom:10px;">Video Details</h4>
+          <p><strong>Video ID:</strong> ${escapeHtml(videoId)}</p>
+          <p><strong>Title:</strong> ${escapeHtml(video.video?.title ?? "")}</p>
+          <p><strong>Owner:</strong> ${escapeHtml(video.owner?.email ?? "")}</p>
+          <p><strong>Status:</strong> ${escapeHtml(video.video?.playbackStatus ?? "")}</p>
+          <p><strong>Visibility:</strong> ${escapeHtml(video.video?.visibility ?? "")}</p>
+          <p><strong>Deleted:</strong> ${isDeleted ? escapeHtml(video.video?.deletedAt) : "No"}</p>
+          <p><strong>Description:</strong> ${escapeHtml(video.video?.description ?? "")}</p>
+        </div>
+
+        <div style="border:1px solid #e5e7eb;border-radius:12px;background:white;padding:16px;">
+          <h4 style="margin-bottom:10px;">Video Stats</h4>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;">
+            <div><strong>${escapeHtml(video.stats?.uniqueViewsCount ?? 0)}</strong><br><span>Unique Views</span></div>
+            <div><strong>${escapeHtml(video.stats?.totalViewsCount ?? 0)}</strong><br><span>Total Views</span></div>
+            <div><strong>${escapeHtml(video.stats?.likesCount ?? 0)}</strong><br><span>Likes</span></div>
+            <div><strong>${escapeHtml(video.stats?.dislikesCount ?? 0)}</strong><br><span>Dislikes</span></div>
+            <div><strong>${escapeHtml(video.stats?.commentsCount ?? 0)}</strong><br><span>Comments</span></div>
+            <div><strong>${escapeHtml(video.stats?.openReportsCount ?? 0)}</strong><br><span>Open Reports</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+};
+
+window.deleteVideoFromTable = async (videoId) => {
+  if (!confirm("Delete this video? This will soft-delete it from feeds.")) return;
+  await requestAdminApi(`/admin/videos/${videoId}/delete`, { method: "POST" });
+  await loadVideos();
+  await window.showVideoDetails(videoId);
+  await loadAuditLogs();
+  await loadDashboardMetrics();
+};
+
+window.restoreVideoFromTable = async (videoId) => {
+  if (!confirm("Restore this video?")) return;
+  await requestAdminApi(`/admin/videos/${videoId}/restore`, { method: "POST" });
+  await loadVideos();
+  await window.showVideoDetails(videoId);
+  await loadAuditLogs();
+  await loadDashboardMetrics();
+};
+
+window.closeSelectedVideoPanel = () => {
+  const panel = getElement("selectedVideoPanel");
+  const output = getElement("selectedVideoOutput");
+
+  if (panel) panel.style.display = "none";
+  if (output) output.innerHTML = "";
+};
+
 const loadComments = async () => {
   try {
     await withLoadingButton("loadCommentsBtn", "Loading Comments...", async () => {
-      writeOutput("commentsOutput", "Loading reported-video comments...");
+      const container = getElement("commentsOutput");
+
+      if (container) {
+        container.innerHTML = "Loading comments...";
+      }
+
       const data = await requestAdminApi("/admin/comments");
-      writeOutput("commentsOutput", data);
+      commentManagementState.comments = data?.comments || [];
+      commentManagementState.page = 1;
+      commentManagementState.expanded = true;
+      renderCommentsTable();
     });
   } catch (error) {
     writeOutput("commentsOutput", error.message);
   }
 };
 
+const getCommentSortValue = (comment, key) => {
+  if (key === "createdAt") return new Date(comment.createdAt ?? 0).getTime();
+  if (key === "deleted") return comment.deletedAt ? 1 : 0;
+  return String(comment[key] ?? "").toLowerCase();
+};
+
+const getFilteredComments = () => {
+  const normalizedSearch = commentManagementState.search.trim().toLowerCase();
+
+  return commentManagementState.comments.filter((comment) => {
+    const matchesSearch = !normalizedSearch || [
+      comment.id,
+      comment.text,
+      comment.userEmail,
+      comment.userDisplayName,
+      comment.videoId,
+      comment.videoTitle,
+    ].some((value) => String(value ?? "").toLowerCase().includes(normalizedSearch));
+
+    const matchesStatus =
+      commentManagementState.status === "all" ||
+      (commentManagementState.status === "active" && !comment.deletedAt) ||
+      (commentManagementState.status === "deleted" && Boolean(comment.deletedAt));
+
+    return matchesSearch && matchesStatus;
+  });
+};
+
+const renderCommentsTable = () => {
+  const container = getElement("commentsOutput");
+  if (!container) return;
+
+  const comments = [...getFilteredComments()].sort((a, b) => {
+    const aValue = getCommentSortValue(a, commentManagementState.sortKey);
+    const bValue = getCommentSortValue(b, commentManagementState.sortKey);
+
+    if (aValue < bValue) return commentManagementState.sortDirection === "asc" ? -1 : 1;
+    if (aValue > bValue) return commentManagementState.sortDirection === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  if (!commentManagementState.expanded) {
+    container.innerHTML = `
+      <div style="margin-top:14px;display:flex;align-items:center;justify-content:space-between;border:1px solid #e5e7eb;border-radius:14px;padding:16px;background:#f8fafc;">
+        <strong>${comments.length} comment records hidden</strong>
+        <button onclick="toggleCommentsExpanded()" style="padding:10px 14px;border-radius:10px;border:1px solid #6d28d9;background:#fff;color:#5b21b6;font-weight:800;cursor:pointer;">
+          Open Records
+        </button>
+      </div>
+    `;
+    return;
+  }
+
+  if (comments.length === 0) {
+    container.innerHTML = "<p>No comments found.</p>";
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(comments.length / commentManagementState.pageSize));
+  commentManagementState.page = Math.min(commentManagementState.page, totalPages);
+
+  const startIndex = (commentManagementState.page - 1) * commentManagementState.pageSize;
+  const pageComments = comments.slice(startIndex, startIndex + commentManagementState.pageSize);
+
+  const sortIcon = (key) => {
+    if (commentManagementState.sortKey !== key) return "↕";
+    return commentManagementState.sortDirection === "asc" ? "↑" : "↓";
+  };
+
+  const rows = pageComments
+    .map((comment, index) => {
+      const rowBackground = index % 2 === 0 ? "#ffffff" : "#f8fafc";
+      const isDeleted = Boolean(comment.deletedAt);
+      const isReply = Boolean(comment.parentCommentId);
+      const statusColor = isDeleted ? "#dc2626" : "#16a34a";
+
+      return `
+        <tr style="background:${rowBackground};">
+          <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;">
+            <strong>${escapeHtml(shortText(comment.text, 54))}</strong><br>
+            <span style="color:#64748b;font-size:12px;">${isReply ? "Reply" : "Comment"}</span>
+          </td>
+          <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;">
+            ${escapeHtml(shortText(comment.userDisplayName || comment.userEmail, 32))}<br>
+            <span style="color:#64748b;font-size:12px;">${escapeHtml(shortText(comment.userEmail, 32))}</span>
+          </td>
+          <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;">
+            ${escapeHtml(shortText(comment.videoTitle, 36))}<br>
+            <span style="color:#64748b;font-size:12px;" title="${escapeHtml(comment.videoId)}">${escapeHtml(shortText(comment.videoId, 24))}</span>
+          </td>
+          <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;">
+            <span style="display:inline-block;padding:5px 10px;border-radius:999px;background:#f8fafc;color:${statusColor};border:1px solid #e5e7eb;font-weight:800;font-size:12px;">
+              ${isDeleted ? "deleted" : "active"}
+            </span>
+          </td>
+          <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;white-space:nowrap;color:#334155;">
+            ${escapeHtml(formatDateTime(comment.createdAt))}
+          </td>
+          <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;white-space:nowrap;">
+            <button onclick="showCommentDetails('${escapeHtml(comment.id)}')" style="padding:8px 12px;border-radius:9px;border:1px solid #8b5cf6;background:#fff;color:#5b21b6;font-weight:800;cursor:pointer;">
+              View
+            </button>
+            <button onclick="copyCommentId('${escapeHtml(comment.id)}')" style="padding:8px 12px;border-radius:9px;border:1px solid #64748b;background:#fff;color:#334155;font-weight:800;cursor:pointer;margin-left:6px;">
+              Copy ID
+            </button>
+            ${isDeleted
+              ? ""
+              : `<button onclick="deleteCommentFromTable('${escapeHtml(comment.id)}')" style="padding:8px 12px;border-radius:9px;border:1px solid #dc2626;background:#dc2626;color:white;font-weight:800;cursor:pointer;margin-left:6px;">Delete</button>`
+            }
+          </td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  container.innerHTML = `
+    <div style="margin-top:16px;padding:16px;border:1px solid #e5e7eb;border-radius:14px;background:#f8fafc;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;align-items:end;">
+      <label style="display:grid;gap:6px;font-weight:700;">
+        Search
+        <input value="${escapeHtml(commentManagementState.search)}" oninput="setCommentSearch(this.value)" placeholder="Text, user, video, ID" style="padding:10px;border:1px solid #d1d5db;border-radius:10px;" />
+      </label>
+
+      <label style="display:grid;gap:6px;font-weight:700;">
+        Status
+        <select onchange="setCommentStatusFilter(this.value)" style="padding:10px;border:1px solid #d1d5db;border-radius:10px;">
+          <option value="all" ${commentManagementState.status === "all" ? "selected" : ""}>All</option>
+          <option value="active" ${commentManagementState.status === "active" ? "selected" : ""}>Active</option>
+          <option value="deleted" ${commentManagementState.status === "deleted" ? "selected" : ""}>Deleted</option>
+        </select>
+      </label>
+
+      <div style="display:flex;gap:10px;align-items:center;">
+        <label style="font-weight:700;">Show</label>
+        <select onchange="changeCommentPageSize(this.value)" style="padding:10px;border:1px solid #d1d5db;border-radius:10px;">
+          <option value="10" ${commentManagementState.pageSize === 10 ? "selected" : ""}>10</option>
+          <option value="20" ${commentManagementState.pageSize === 20 ? "selected" : ""}>20</option>
+          <option value="50" ${commentManagementState.pageSize === 50 ? "selected" : ""}>50</option>
+          <option value="100" ${commentManagementState.pageSize === 100 ? "selected" : ""}>100</option>
+        </select>
+        <span>entries</span>
+      </div>
+
+      <button onclick="exportFilteredComments()" style="padding:10px 14px;border-radius:10px;border:1px solid #16a34a;background:#16a34a;color:white;font-weight:800;cursor:pointer;">
+        Export Comments CSV
+      </button>
+
+      <button onclick="toggleCommentsExpanded()" style="padding:10px 14px;border-radius:10px;border:1px solid #6d28d9;background:#fff;color:#5b21b6;font-weight:800;cursor:pointer;">
+        Close Records
+      </button>
+    </div>
+
+    <div style="margin-top:14px;overflow:auto;border:1px solid #dbe3ef;border-radius:14px;">
+      <table style="width:100%;border-collapse:collapse;min-width:1100px;font-family:Inter, Arial, sans-serif;line-height:1.35;">
+        <thead>
+          <tr style="background:#f8fafc;">
+            <th onclick="sortComments('text')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">Comment ${sortIcon("text")}</th>
+            <th onclick="sortComments('userEmail')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">User ${sortIcon("userEmail")}</th>
+            <th onclick="sortComments('videoTitle')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">Video ${sortIcon("videoTitle")}</th>
+            <th onclick="sortComments('deleted')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">Status ${sortIcon("deleted")}</th>
+            <th onclick="sortComments('createdAt')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">Created ${sortIcon("createdAt")}</th>
+            <th style="text-align:left;padding:12px;border:1px solid #e5e7eb;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+      <span>Showing ${startIndex + 1} to ${Math.min(startIndex + commentManagementState.pageSize, comments.length)} of ${comments.length} comments</span>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button onclick="changeCommentPage(${commentManagementState.page - 1})" ${commentManagementState.page <= 1 ? "disabled" : ""} style="padding:8px 12px;border-radius:8px;border:1px solid #d1d5db;">Prev</button>
+        <strong>Page ${commentManagementState.page} / ${totalPages}</strong>
+        <button onclick="changeCommentPage(${commentManagementState.page + 1})" ${commentManagementState.page >= totalPages ? "disabled" : ""} style="padding:8px 12px;border-radius:8px;border:1px solid #d1d5db;">Next</button>
+      </div>
+    </div>
+  `;
+};
+
+window.sortComments = (key) => {
+  if (commentManagementState.sortKey === key) {
+    commentManagementState.sortDirection = commentManagementState.sortDirection === "asc" ? "desc" : "asc";
+  } else {
+    commentManagementState.sortKey = key;
+    commentManagementState.sortDirection = key === "createdAt" ? "desc" : "asc";
+  }
+
+  commentManagementState.page = 1;
+  renderCommentsTable();
+};
+
+window.changeCommentPage = (page) => {
+  const totalPages = Math.max(1, Math.ceil(getFilteredComments().length / commentManagementState.pageSize));
+  commentManagementState.page = Math.min(Math.max(1, Number(page)), totalPages);
+  renderCommentsTable();
+};
+
+window.changeCommentPageSize = (pageSize) => {
+  commentManagementState.pageSize = Number(pageSize) || 10;
+  commentManagementState.page = 1;
+  renderCommentsTable();
+};
+
+window.setCommentSearch = (value) => {
+  commentManagementState.search = value;
+  commentManagementState.page = 1;
+  renderCommentsTable();
+};
+
+window.setCommentStatusFilter = (value) => {
+  commentManagementState.status = value;
+  commentManagementState.page = 1;
+  renderCommentsTable();
+};
+
+window.toggleCommentsExpanded = () => {
+  commentManagementState.expanded = !commentManagementState.expanded;
+  renderCommentsTable();
+};
+
+window.copyCommentId = async (commentId) => {
+  try {
+    await navigator.clipboard.writeText(commentId);
+    alert("Comment ID copied");
+  } catch {
+    prompt("Copy Comment ID", commentId);
+  }
+};
+
+window.exportFilteredComments = () => {
+  const rows = getFilteredComments();
+  if (rows.length === 0) {
+    alert("No comments available to export");
+    return;
+  }
+
+  const headers = ["id", "videoId", "userId", "userEmail", "userDisplayName", "parentCommentId", "text", "videoTitle", "deletedAt", "deletedByType", "deletedByUserId", "moderationReason", "createdAt", "updatedAt"];
+  const escapeCsv = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+  const csv = [
+    headers.map(escapeCsv).join(","),
+    ...rows.map((comment) => headers.map((header) => escapeCsv(comment[header])).join(",")),
+  ].join("\n");
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "iadme-comments.csv";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+window.showCommentDetails = (commentId) => {
+  const panel = getElement("selectedCommentPanel");
+  const output = getElement("selectedCommentOutput");
+
+  if (!panel || !output) return;
+
+  const comment = commentManagementState.comments.find((item) => item.id === commentId);
+
+  if (!comment) {
+    output.innerHTML = "<p>Comment not found.</p>";
+    panel.style.display = "block";
+    return;
+  }
+
+  const isDeleted = Boolean(comment.deletedAt);
+  const isReply = Boolean(comment.parentCommentId);
+
+  panel.style.display = "block";
+  output.innerHTML = `
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:16px;">
+      <strong style="font-size:18px;color:#5b21b6;">Comment ${escapeHtml(shortText(comment.id, 18))}</strong>
+      <button onclick="closeSelectedCommentPanel()" style="padding:8px 12px;border-radius:9px;border:1px solid #6d28d9;background:#6d28d9;color:white;font-weight:800;cursor:pointer;">
+        Close Details ×
+      </button>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px;">
+      <button onclick="copyCommentId('${escapeHtml(comment.id)}')" style="padding:9px 13px;border-radius:10px;border:1px solid #64748b;background:#fff;color:#334155;font-weight:800;cursor:pointer;">
+        Copy Comment ID
+      </button>
+      <button onclick="copyVideoId('${escapeHtml(comment.videoId)}')" style="padding:9px 13px;border-radius:10px;border:1px solid #64748b;background:#fff;color:#334155;font-weight:800;cursor:pointer;">
+        Copy Video ID
+      </button>
+      ${isDeleted
+        ? ""
+        : `<button onclick="deleteCommentFromTable('${escapeHtml(comment.id)}')" style="padding:9px 13px;border-radius:10px;border:1px solid #dc2626;background:#dc2626;color:white;font-weight:800;cursor:pointer;">Delete Comment</button>`
+      }
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;">
+      <div style="border:1px solid #e5e7eb;border-radius:12px;background:white;padding:16px;">
+        <h4 style="margin-bottom:10px;">Comment</h4>
+        <p><strong>Comment ID:</strong> ${escapeHtml(comment.id)}</p>
+        <p><strong>Type:</strong> ${isReply ? "Reply" : "Comment"}</p>
+        <p><strong>Status:</strong> ${isDeleted ? "Deleted" : "Active"}</p>
+        <p><strong>Text:</strong> ${escapeHtml(comment.text)}</p>
+        <p><strong>Created:</strong> ${escapeHtml(formatDateTime(comment.createdAt))}</p>
+        <p><strong>Deleted At:</strong> ${isDeleted ? escapeHtml(formatDateTime(comment.deletedAt)) : "-"}</p>
+        <p><strong>Moderation Reason:</strong> ${escapeHtml(comment.moderationReason || "-")}</p>
+      </div>
+
+      <div style="border:1px solid #e5e7eb;border-radius:12px;background:white;padding:16px;">
+        <h4 style="margin-bottom:10px;">User & Video</h4>
+        <p><strong>User:</strong> ${escapeHtml(comment.userDisplayName || "-")}</p>
+        <p><strong>Email:</strong> ${escapeHtml(comment.userEmail || "-")}</p>
+        <p><strong>User ID:</strong> ${escapeHtml(comment.userId)}</p>
+        <p><strong>Video:</strong> ${escapeHtml(comment.videoTitle || "-")}</p>
+        <p><strong>Video ID:</strong> ${escapeHtml(comment.videoId)}</p>
+        <p><strong>Parent Comment ID:</strong> ${escapeHtml(comment.parentCommentId || "-")}</p>
+      </div>
+    </div>
+  `;
+};
+
+window.deleteCommentFromTable = async (commentId) => {
+  const reason = prompt("Reason for deleting this comment?", "Admin moderation");
+  if (reason === null) return;
+
+  await requestAdminApi(`/admin/comments/${commentId}/delete`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+
+  await loadComments();
+  await loadAuditLogs();
+  await loadDashboardMetrics();
+
+  const panel = getElement("selectedCommentPanel");
+  if (panel && panel.style.display !== "none") {
+    window.showCommentDetails(commentId);
+  }
+};
+
+window.closeSelectedCommentPanel = () => {
+  const panel = getElement("selectedCommentPanel");
+  const output = getElement("selectedCommentOutput");
+
+  if (panel) panel.style.display = "none";
+  if (output) output.innerHTML = "";
+};
+
 const loadUsers = async () => {
   try {
     await withLoadingButton("loadUsersBtn", "Loading Users...", async () => {
-      writeOutput("usersOutput", "Loading users...");
+      const container = getElement("usersOutput");
+
+      if (container) {
+        container.innerHTML = "Loading users...";
+      }
+
       const data = await requestAdminApi("/admin/users");
-      writeOutput("usersOutput", data);
+      userManagementState.users = data?.users || [];
+      userManagementState.page = 1;
+      userManagementState.expanded = true;
+      renderUsersTable();
     });
   } catch (error) {
     writeOutput("usersOutput", error.message);
   }
+};
+
+const getUserSortValue = (user, key) => {
+  if (key === "createdAt") return new Date(user.createdAt ?? 0).getTime();
+  if (key === "phoneVerified") return user.phoneVerified ? 1 : 0;
+  return String(user[key] ?? "").toLowerCase();
+};
+
+const getFilteredUsers = () => {
+  const normalizedSearch = userManagementState.search.trim().toLowerCase();
+
+  return userManagementState.users.filter((user) => {
+    const matchesSearch = !normalizedSearch || [user.id, user.email, user.phoneNumber]
+      .some((value) => String(value ?? "").toLowerCase().includes(normalizedSearch));
+
+    const matchesStatus =
+      userManagementState.status === "all" || user.status === userManagementState.status;
+
+    return matchesSearch && matchesStatus;
+  });
+};
+
+const renderUsersTable = () => {
+  const container = getElement("usersOutput");
+  if (!container) return;
+
+  const users = [...getFilteredUsers()].sort((a, b) => {
+    const aValue = getUserSortValue(a, userManagementState.sortKey);
+    const bValue = getUserSortValue(b, userManagementState.sortKey);
+
+    if (aValue < bValue) return userManagementState.sortDirection === "asc" ? -1 : 1;
+    if (aValue > bValue) return userManagementState.sortDirection === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  if (!userManagementState.expanded) {
+    container.innerHTML = `
+      <div style="margin-top:14px;display:flex;align-items:center;justify-content:space-between;border:1px solid #e5e7eb;border-radius:14px;padding:16px;background:#f8fafc;">
+        <strong>${users.length} user records hidden</strong>
+        <button onclick="toggleUsersExpanded()" style="padding:10px 14px;border-radius:10px;border:1px solid #6d28d9;background:#fff;color:#5b21b6;font-weight:800;cursor:pointer;">
+          Open Records
+        </button>
+      </div>
+    `;
+    return;
+  }
+
+  if (users.length === 0) {
+    container.innerHTML = "<p>No users found.</p>";
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(users.length / userManagementState.pageSize));
+  userManagementState.page = Math.min(userManagementState.page, totalPages);
+
+  const startIndex = (userManagementState.page - 1) * userManagementState.pageSize;
+  const pageUsers = users.slice(startIndex, startIndex + userManagementState.pageSize);
+
+  const sortIcon = (key) => {
+    if (userManagementState.sortKey !== key) return "↕";
+    return userManagementState.sortDirection === "asc" ? "↑" : "↓";
+  };
+
+  const rows = pageUsers
+    .map((user, index) => {
+      const rowBackground = index % 2 === 0 ? "#ffffff" : "#f8fafc";
+      const isInactive = user.status === "inactive";
+      const statusColor = isInactive ? "#dc2626" : "#16a34a";
+      const phoneStatus = user.phoneVerified ? "Verified" : "Not verified";
+
+      return `
+        <tr style="background:${rowBackground};">
+          <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;">
+            <strong>${escapeHtml(shortText(user.email, 36))}</strong><br>
+            <span style="color:#64748b;font-size:12px;" title="${escapeHtml(user.id)}">${escapeHtml(shortText(user.id, 30))}</span>
+          </td>
+          <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;">
+            <span style="display:inline-block;padding:5px 10px;border-radius:999px;background:#f8fafc;color:${statusColor};border:1px solid #e5e7eb;font-weight:800;font-size:12px;">
+              ${escapeHtml(user.status)}
+            </span>
+          </td>
+          <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;color:#334155;">
+            ${escapeHtml(user.phoneNumber || "-")}<br>
+            <span style="font-size:12px;color:${user.phoneVerified ? "#16a34a" : "#64748b"};">${phoneStatus}</span>
+          </td>
+          <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;white-space:nowrap;color:#334155;">
+            ${escapeHtml(formatDateTime(user.createdAt))}
+          </td>
+          <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;white-space:nowrap;">
+            <button onclick="showUserDetails('${escapeHtml(user.id)}')" style="padding:8px 12px;border-radius:9px;border:1px solid #8b5cf6;background:#fff;color:#5b21b6;font-weight:800;cursor:pointer;">
+              View
+            </button>
+            <button onclick="copyUserId('${escapeHtml(user.id)}')" style="padding:8px 12px;border-radius:9px;border:1px solid #64748b;background:#fff;color:#334155;font-weight:800;cursor:pointer;margin-left:6px;">
+              Copy ID
+            </button>
+            ${isInactive
+              ? `<button onclick="reactivateUserFromTable('${escapeHtml(user.id)}')" style="padding:8px 12px;border-radius:9px;border:1px solid #16a34a;background:#16a34a;color:white;font-weight:800;cursor:pointer;margin-left:6px;">Reactivate</button>`
+              : `<button onclick="deactivateUserFromTable('${escapeHtml(user.id)}')" style="padding:8px 12px;border-radius:9px;border:1px solid #dc2626;background:#dc2626;color:white;font-weight:800;cursor:pointer;margin-left:6px;">Deactivate</button>`
+            }
+          </td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  container.innerHTML = `
+    <div style="margin-top:16px;padding:16px;border:1px solid #e5e7eb;border-radius:14px;background:#f8fafc;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;align-items:end;">
+      <label style="display:grid;gap:6px;font-weight:700;">
+        Search
+        <input value="${escapeHtml(userManagementState.search)}" oninput="setUserSearch(this.value)" placeholder="Email, user ID, phone" style="padding:10px;border:1px solid #d1d5db;border-radius:10px;" />
+      </label>
+
+      <label style="display:grid;gap:6px;font-weight:700;">
+        Status
+        <select onchange="setUserStatusFilter(this.value)" style="padding:10px;border:1px solid #d1d5db;border-radius:10px;">
+          <option value="all" ${userManagementState.status === "all" ? "selected" : ""}>All</option>
+          <option value="active" ${userManagementState.status === "active" ? "selected" : ""}>Active</option>
+          <option value="inactive" ${userManagementState.status === "inactive" ? "selected" : ""}>Inactive</option>
+        </select>
+      </label>
+
+      <div style="display:flex;gap:10px;align-items:center;">
+        <label style="font-weight:700;">Show</label>
+        <select onchange="changeUserPageSize(this.value)" style="padding:10px;border:1px solid #d1d5db;border-radius:10px;">
+          <option value="10" ${userManagementState.pageSize === 10 ? "selected" : ""}>10</option>
+          <option value="20" ${userManagementState.pageSize === 20 ? "selected" : ""}>20</option>
+          <option value="50" ${userManagementState.pageSize === 50 ? "selected" : ""}>50</option>
+          <option value="100" ${userManagementState.pageSize === 100 ? "selected" : ""}>100</option>
+        </select>
+        <span>entries</span>
+      </div>
+
+      <button onclick="exportFilteredUsers()" style="padding:10px 14px;border-radius:10px;border:1px solid #16a34a;background:#16a34a;color:white;font-weight:800;cursor:pointer;">
+        Export Users CSV
+      </button>
+
+      <button onclick="toggleUsersExpanded()" style="padding:10px 14px;border-radius:10px;border:1px solid #6d28d9;background:#fff;color:#5b21b6;font-weight:800;cursor:pointer;">
+        Close Records
+      </button>
+    </div>
+
+    <div style="margin-top:14px;overflow:auto;border:1px solid #dbe3ef;border-radius:14px;">
+      <table style="width:100%;border-collapse:collapse;min-width:980px;font-family:Inter, Arial, sans-serif;line-height:1.35;">
+        <thead>
+          <tr style="background:#f8fafc;">
+            <th onclick="sortUsers('email')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">User ${sortIcon("email")}</th>
+            <th onclick="sortUsers('status')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">Status ${sortIcon("status")}</th>
+            <th onclick="sortUsers('phoneVerified')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">Phone ${sortIcon("phoneVerified")}</th>
+            <th onclick="sortUsers('createdAt')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">Created ${sortIcon("createdAt")}</th>
+            <th style="text-align:left;padding:12px;border:1px solid #e5e7eb;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+      <span>Showing ${startIndex + 1} to ${Math.min(startIndex + userManagementState.pageSize, users.length)} of ${users.length} users</span>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button onclick="changeUserPage(${userManagementState.page - 1})" ${userManagementState.page <= 1 ? "disabled" : ""} style="padding:8px 12px;border-radius:8px;border:1px solid #d1d5db;">Prev</button>
+        <strong>Page ${userManagementState.page} / ${totalPages}</strong>
+        <button onclick="changeUserPage(${userManagementState.page + 1})" ${userManagementState.page >= totalPages ? "disabled" : ""} style="padding:8px 12px;border-radius:8px;border:1px solid #d1d5db;">Next</button>
+      </div>
+    </div>
+  `;
+};
+
+window.sortUsers = (key) => {
+  if (userManagementState.sortKey === key) {
+    userManagementState.sortDirection = userManagementState.sortDirection === "asc" ? "desc" : "asc";
+  } else {
+    userManagementState.sortKey = key;
+    userManagementState.sortDirection = key === "createdAt" ? "desc" : "asc";
+  }
+
+  userManagementState.page = 1;
+  renderUsersTable();
+};
+
+window.changeUserPage = (page) => {
+  const totalPages = Math.max(1, Math.ceil(getFilteredUsers().length / userManagementState.pageSize));
+  userManagementState.page = Math.min(Math.max(1, Number(page)), totalPages);
+  renderUsersTable();
+};
+
+window.changeUserPageSize = (pageSize) => {
+  userManagementState.pageSize = Number(pageSize) || 10;
+  userManagementState.page = 1;
+  renderUsersTable();
+};
+
+window.setUserSearch = (value) => {
+  userManagementState.search = value;
+  userManagementState.page = 1;
+  renderUsersTable();
+};
+
+window.setUserStatusFilter = (value) => {
+  userManagementState.status = value;
+  userManagementState.page = 1;
+  renderUsersTable();
+};
+
+window.toggleUsersExpanded = () => {
+  userManagementState.expanded = !userManagementState.expanded;
+  renderUsersTable();
+};
+
+window.copyUserId = async (userId) => {
+  try {
+    await navigator.clipboard.writeText(userId);
+    alert("User ID copied");
+  } catch {
+    prompt("Copy User ID", userId);
+  }
+};
+
+window.exportFilteredUsers = () => {
+  const rows = getFilteredUsers();
+  if (rows.length === 0) {
+    alert("No users available to export");
+    return;
+  }
+
+  const headers = ["id", "email", "status", "phoneNumber", "phoneVerified", "createdAt", "updatedAt"];
+  const escapeCsv = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+  const csv = [
+    headers.map(escapeCsv).join(","),
+    ...rows.map((user) => headers.map((header) => escapeCsv(user[header])).join(",")),
+  ].join("\n");
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "iadme-users.csv";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+window.showUserDetails = async (userId) => {
+  const panel = getElement("selectedUserPanel");
+  const output = getElement("selectedUserOutput");
+
+  if (!panel || !output) return;
+
+  panel.style.display = "block";
+  output.innerHTML = "Loading user details...";
+
+  try {
+    const data = await requestAdminApi(`/admin/users/${userId}`);
+    renderSelectedUserDetails(userId, data);
+  } catch (error) {
+    output.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
+  }
+};
+
+const renderSelectedUserDetails = (userId, data) => {
+  const output = getElement("selectedUserOutput");
+  if (!output) return;
+
+  const user = data?.user || {};
+  const profile = data?.profile;
+  const stats = data?.stats || {};
+  const isInactive = user.status === "inactive";
+
+  output.innerHTML = `
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:16px;">
+      <strong style="font-size:18px;color:#5b21b6;">User ${escapeHtml(shortText(user.email || userId, 28))}</strong>
+      <button onclick="closeSelectedUserPanel()" style="padding:8px 12px;border-radius:9px;border:1px solid #6d28d9;background:#6d28d9;color:white;font-weight:800;cursor:pointer;">
+        Close Details ×
+      </button>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px;">
+      <button onclick="showUserDetails('${escapeHtml(userId)}')" style="padding:9px 13px;border-radius:10px;border:1px solid #8b5cf6;background:#fff;color:#5b21b6;font-weight:800;cursor:pointer;">
+        Refresh Details
+      </button>
+      <button onclick="copyUserId('${escapeHtml(userId)}')" style="padding:9px 13px;border-radius:10px;border:1px solid #64748b;background:#fff;color:#334155;font-weight:800;cursor:pointer;">
+        Copy User ID
+      </button>
+      ${isInactive
+        ? `<button onclick="reactivateUserFromTable('${escapeHtml(userId)}')" style="padding:9px 13px;border-radius:10px;border:1px solid #16a34a;background:#16a34a;color:white;font-weight:800;cursor:pointer;">Reactivate User</button>`
+        : `<button onclick="deactivateUserFromTable('${escapeHtml(userId)}')" style="padding:9px 13px;border-radius:10px;border:1px solid #dc2626;background:#dc2626;color:white;font-weight:800;cursor:pointer;">Deactivate User</button>`
+      }
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;">
+      <div style="border:1px solid #e5e7eb;border-radius:12px;background:white;padding:16px;">
+        <h4 style="margin-bottom:10px;">Account</h4>
+        <p><strong>User ID:</strong> ${escapeHtml(userId)}</p>
+        <p><strong>Email:</strong> ${escapeHtml(user.email ?? "")}</p>
+        <p><strong>Status:</strong> ${escapeHtml(user.status ?? "")}</p>
+        <p><strong>Phone:</strong> ${escapeHtml(user.phoneNumber || "-")}</p>
+        <p><strong>Phone Verified:</strong> ${user.phoneVerified ? "Yes" : "No"}</p>
+        <p><strong>Created:</strong> ${escapeHtml(formatDateTime(user.createdAt))}</p>
+      </div>
+
+      <div style="border:1px solid #e5e7eb;border-radius:12px;background:white;padding:16px;">
+        <h4 style="margin-bottom:10px;">Profile & Stats</h4>
+        <p><strong>Display Name:</strong> ${escapeHtml(profile?.displayName || "-")}</p>
+        <p><strong>Bio:</strong> ${escapeHtml(profile?.bio || "-")}</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-top:12px;">
+          <div><strong>${escapeHtml(stats.uploadsCount ?? 0)}</strong><br><span>Uploads</span></div>
+          <div><strong>${escapeHtml(stats.videosCount ?? 0)}</strong><br><span>Videos</span></div>
+          <div><strong>${escapeHtml(stats.commentsCount ?? 0)}</strong><br><span>Comments</span></div>
+          <div><strong>${escapeHtml(stats.reportsFiledCount ?? 0)}</strong><br><span>Reports Filed</span></div>
+        </div>
+      </div>
+    </div>
+  `;
+};
+
+window.deactivateUserFromTable = async (userId) => {
+  if (!confirm("Deactivate this user?")) return;
+  await requestAdminApi(`/admin/users/${userId}/deactivate`, { method: "POST" });
+  await loadUsers();
+  await window.showUserDetails(userId);
+  await loadAuditLogs();
+  await loadDashboardMetrics();
+};
+
+window.reactivateUserFromTable = async (userId) => {
+  if (!confirm("Reactivate this user?")) return;
+  await requestAdminApi(`/admin/users/${userId}/reactivate`, { method: "POST" });
+  await loadUsers();
+  await window.showUserDetails(userId);
+  await loadAuditLogs();
+  await loadDashboardMetrics();
+};
+
+window.closeSelectedUserPanel = () => {
+  const panel = getElement("selectedUserPanel");
+  const output = getElement("selectedUserOutput");
+
+  if (panel) panel.style.display = "none";
+  if (output) output.innerHTML = "";
 };
 
 const loadReports = async () => {
@@ -376,6 +1625,8 @@ const renderSelectedReportDetails = (videoId, reportId, video) => {
   if (!output) return;
 
   const isDeleted = Boolean(video.video?.deletedAt);
+  const playbackUrl = video.video?.hlsUrl || video.video?.playbackUrl || "";
+  const thumbnailUrl = video.video?.thumbnailUrl || "";
 
   output.innerHTML = `
     <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:16px;">
@@ -398,21 +1649,62 @@ const renderSelectedReportDetails = (videoId, reportId, video) => {
       }
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;">
-      <div>
-        <p><strong>Report ID:</strong> ${escapeHtml(reportId)}</p>
-        <p><strong>Video ID:</strong> ${escapeHtml(videoId)}</p>
-        <p><strong>Title:</strong> ${escapeHtml(video.video?.title ?? "")}</p>
-        <p><strong>Owner:</strong> ${escapeHtml(video.owner?.email ?? "")}</p>
-        <p><strong>Status:</strong> ${escapeHtml(video.video?.playbackStatus ?? "")}</p>
-        <p><strong>Visibility:</strong> ${escapeHtml(video.video?.visibility ?? "")}</p>
-        <p><strong>Deleted:</strong> ${isDeleted ? escapeHtml(video.video?.deletedAt) : "No"}</p>
-        <p><strong>Description:</strong> ${escapeHtml(video.video?.description ?? "")}</p>
+    <div style="display:grid;grid-template-columns:minmax(280px, 420px) 1fr;gap:18px;align-items:start;">
+      <div style="border:1px solid #e5e7eb;border-radius:16px;background:#020617;padding:12px;">
+        ${playbackUrl
+          ? `<video
+              controls
+              playsinline
+              preload="metadata"
+              poster="${escapeHtml(thumbnailUrl)}"
+              src="${escapeHtml(playbackUrl)}"
+              style="width:100%;max-height:520px;border-radius:12px;background:#000;display:block;"
+            ></video>`
+          : `<div style="min-height:260px;display:grid;place-items:center;color:#cbd5e1;background:#0f172a;border-radius:12px;">
+              No playback URL available
+            </div>`
+        }
+
+        <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;">
+          ${playbackUrl
+            ? `<a href="${escapeHtml(playbackUrl)}" target="_blank" rel="noopener" style="padding:8px 10px;border-radius:9px;background:#ffffff;color:#5b21b6;font-weight:800;font-size:13px;">
+                Open Video URL
+              </a>`
+            : ""
+          }
+          ${thumbnailUrl
+            ? `<a href="${escapeHtml(thumbnailUrl)}" target="_blank" rel="noopener" style="padding:8px 10px;border-radius:9px;background:#ffffff;color:#5b21b6;font-weight:800;font-size:13px;">
+                Open Thumbnail
+              </a>`
+            : ""
+          }
+        </div>
       </div>
 
-      <div style="border:1px solid #e5e7eb;border-radius:12px;background:white;padding:16px;">
-        <h4 style="margin-bottom:10px;">Video Stats</h4>
-        <pre style="overflow:auto;">${escapeHtml(formatJson(video.stats ?? {}))}</pre>
+      <div style="display:grid;gap:16px;">
+        <div style="border:1px solid #e5e7eb;border-radius:12px;background:white;padding:16px;">
+          <h4 style="margin-bottom:10px;">Video Review</h4>
+          <p><strong>Report ID:</strong> ${escapeHtml(reportId)}</p>
+          <p><strong>Video ID:</strong> ${escapeHtml(videoId)}</p>
+          <p><strong>Title:</strong> ${escapeHtml(video.video?.title ?? "")}</p>
+          <p><strong>Owner:</strong> ${escapeHtml(video.owner?.email ?? "")}</p>
+          <p><strong>Status:</strong> ${escapeHtml(video.video?.playbackStatus ?? "")}</p>
+          <p><strong>Visibility:</strong> ${escapeHtml(video.video?.visibility ?? "")}</p>
+          <p><strong>Deleted:</strong> ${isDeleted ? escapeHtml(video.video?.deletedAt) : "No"}</p>
+          <p><strong>Description:</strong> ${escapeHtml(video.video?.description ?? "")}</p>
+        </div>
+
+        <div style="border:1px solid #e5e7eb;border-radius:12px;background:white;padding:16px;">
+          <h4 style="margin-bottom:10px;">Video Stats</h4>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;">
+            <div><strong>${escapeHtml(video.stats?.uniqueViewsCount ?? 0)}</strong><br><span>Unique Views</span></div>
+            <div><strong>${escapeHtml(video.stats?.totalViewsCount ?? 0)}</strong><br><span>Total Views</span></div>
+            <div><strong>${escapeHtml(video.stats?.likesCount ?? 0)}</strong><br><span>Likes</span></div>
+            <div><strong>${escapeHtml(video.stats?.dislikesCount ?? 0)}</strong><br><span>Dislikes</span></div>
+            <div><strong>${escapeHtml(video.stats?.commentsCount ?? 0)}</strong><br><span>Comments</span></div>
+            <div><strong>${escapeHtml(video.stats?.openReportsCount ?? 0)}</strong><br><span>Open Reports</span></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -619,6 +1911,12 @@ const saveConfig = () => {
     localStorage.setItem(STORAGE_KEYS.token, tokenInput.value.trim());
   }
 
+    const emailInput = getElement("adminEmail");
+
+  if (emailInput?.value?.trim()) {
+    localStorage.setItem(STORAGE_KEYS.email, emailInput.value.trim());
+  }
+
   alert("Admin configuration saved");
 };
 
@@ -642,6 +1940,18 @@ const restoreConfig = () => {
   if (tokenInput && savedToken) {
     tokenInput.value = savedToken;
   }
+    const savedEmail = localStorage.getItem(STORAGE_KEYS.email);
+  const emailInput = getElement("adminEmail");
+
+  if (savedEmail && emailInput) {
+    emailInput.value = savedEmail;
+  }
+
+  const token = tokenInput?.value?.trim();
+  setLoginStatus(
+    token ? `Logged in as ${savedEmail || "admin"}` : "Not logged in.",
+    Boolean(token)
+  );
 };
 
 const bindEvents = () => {
@@ -661,16 +1971,26 @@ const bindEvents = () => {
 
   getElement("adminEnv")?.addEventListener("change", applyEnvironmentSelection);
   getElement("saveConfigBtn")?.addEventListener("click", saveConfig);
+
+  getElement("adminLoginBtn")?.addEventListener("click", loginAdmin);
+  getElement("adminLogoutBtn")?.addEventListener("click", logoutAdmin);
+
   getElement("loadAuditBtn")?.addEventListener("click", loadAuditLogs);
   getElement("loadVideosBtn")?.addEventListener("click", loadVideos);
   getElement("loadCommentsBtn")?.addEventListener("click", loadComments);
   getElement("loadUsersBtn")?.addEventListener("click", loadUsers);
   getElement("loadReportsBtn")?.addEventListener("click", loadReports);
   getElement("loadDashboardBtn")?.addEventListener("click", loadDashboardMetrics);
+
 };
 
 document.addEventListener("DOMContentLoaded", () => {
   restoreConfig();
   bindEvents();
-  loadDashboardMetrics();
+
+  const token = getElement("adminToken")?.value?.trim();
+
+  if (token) {
+    loadDashboardMetrics();
+  }
 });
