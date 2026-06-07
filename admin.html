@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>iAdMe Admin Console</title>
+
+  <link rel="icon" href="/favicon.ico" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container header-container">
+      <a class="brand" href="index.html">
+        <img src="assets/iadme-logo.png" alt="iAdMe Logo" class="brand-logo" />
+        <div>
+          <h1>iAdMe Admin</h1>
+          <p>Moderation & Operations Console</p>
+        </div>
+      </a>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="container">
+
+      <div class="page-card">
+        <h2>Admin Console</h2>
+
+        <p>
+          Internal moderation and operations dashboard for iAdMe.
+        </p>
+
+        <div style="margin-top:20px; display:grid; gap:12px;">
+          <label>
+            Environment
+          </label>
+          <select
+            id="adminEnv"
+            style="padding:12px; border:1px solid #d1d5db; border-radius:8px;"
+          >
+            <option value="local">Local</option>
+            <option value="staging">Staging</option>
+            <option value="production">Production</option>
+          </select>
+
+          <label>
+            API Base URL
+          </label>
+          <input
+            id="baseUrl"
+            type="text"
+            value="https://api.iadme.app"
+            style="padding:12px; border:1px solid #d1d5db; border-radius:8px;"
+          />
+
+          <label>
+            Admin JWT Token
+          </label>
+          <textarea
+            id="adminToken"
+            rows="4"
+            placeholder="Paste admin access token"
+            style="padding:12px; border:1px solid #d1d5db; border-radius:8px;"
+          ></textarea>
+
+          <button class="button" id="saveConfigBtn">
+            Save Configuration
+          </button>
+        </div>
+      </div>
+
+      <div class="page-card" style="margin-top:24px;">
+        <h3>Moderation Dashboard</h3>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-top:20px;">
+          <div style="padding:20px;border:1px solid #e5e7eb;border-radius:12px;background:#f8fafc;">
+            <div style="font-size:13px;color:#64748b;">Open Reports</div>
+            <div id="openReportsCount" style="font-size:32px;font-weight:800;">-</div>
+          </div>
+
+          <div style="padding:20px;border:1px solid #e5e7eb;border-radius:12px;background:#f8fafc;">
+            <div style="font-size:13px;color:#64748b;">Deleted Videos</div>
+            <div id="deletedVideosCount" style="font-size:32px;font-weight:800;">-</div>
+          </div>
+
+          <div style="padding:20px;border:1px solid #e5e7eb;border-radius:12px;background:#f8fafc;">
+            <div style="font-size:13px;color:#64748b;">Deleted Comments</div>
+            <div id="deletedCommentsCount" style="font-size:32px;font-weight:800;">-</div>
+          </div>
+
+          <div style="padding:20px;border:1px solid #e5e7eb;border-radius:12px;background:#f8fafc;">
+            <div style="font-size:13px;color:#64748b;">Deactivated Users</div>
+            <div id="deactivatedUsersCount" style="font-size:32px;font-weight:800;">-</div>
+          </div>
+        </div>
+
+        <button class="button" id="loadDashboardBtn" style="margin-top:20px;">
+          Load Dashboard Metrics
+        </button>
+      </div>
+
+      <div class="page-card" style="margin-top:24px;">
+        <h3>Audit Logs</h3>
+
+        <button class="button" id="loadAuditBtn">
+          Load Audit Logs
+        </button>
+
+        <pre id="auditOutput" style="margin-top:20px; overflow:auto;"></pre>
+      </div>
+
+      <div class="page-card" style="margin-top:24px;">
+        <h3>Videos</h3>
+
+        <button class="button" id="loadVideosBtn">
+          Load Videos
+        </button>
+
+        <pre id="videosOutput" style="margin-top:20px; overflow:auto;"></pre>
+      </div>
+
+      <div class="page-card" style="margin-top:24px;">
+        <h3>Reported Video Comments</h3>
+
+        <button class="button" id="loadCommentsBtn">
+          Load Comments
+        </button>
+
+        <pre id="commentsOutput" style="margin-top:20px; overflow:auto;"></pre>
+      </div>
+
+      <div class="page-card" style="margin-top:24px;">
+        <h3>Users</h3>
+
+        <button class="button" id="loadUsersBtn">
+          Load Users
+        </button>
+
+        <pre id="usersOutput" style="margin-top:20px; overflow:auto;"></pre>
+      </div>
+
+    </div>
+  </main>
+
+  <script src="admin.js"></script>
+</body>
+</html>
