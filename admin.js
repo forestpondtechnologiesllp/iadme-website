@@ -193,6 +193,15 @@ const commentManagementState = {
   status: "all",
 };
 
+const couponManagementState = {
+  redemptions: [],
+  page: 1,
+  pageSize: 10,
+  sortKey: "createdAt",
+  sortDirection: "desc",
+  search: "",
+};
+
 const escapeHtml = (value) =>
   String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -1060,6 +1069,326 @@ window.closeSelectedCommentPanel = () => {
 
   if (panel) panel.style.display = "none";
   if (output) output.innerHTML = "";
+};
+
+const createCoupon = async () => {
+  const code = getElement("couponCode")?.value?.trim();
+  const rewardType = getElement("couponRewardType")?.value;
+  const rewardAmount = Number(getElement("couponRewardAmount")?.value);
+  const currency = getElement("couponCurrency")?.value?.trim() || "INR";
+
+  if (!code || !Number.isFinite(rewardAmount) || rewardAmount <= 0) {
+    alert("Coupon code and valid reward amount are required");
+    return;
+  }
+
+  try {
+    await withLoadingButton("createCouponBtn", "Creating Coupon...", async () => {
+      const data = await requestAdminApi("/admin/coupons", {
+        method: "POST",
+        body: JSON.stringify({ code, rewardType, rewardAmount, currency }),
+      });
+
+      getElement("couponsOutput").innerHTML = `
+        <div style="padding:16px;border:1px solid #bbf7d0;border-radius:14px;background:#f0fdf4;color:#166534;">
+          <strong>Coupon created successfully.</strong>
+          <pre style="margin-top:12px;white-space:pre-wrap;">${escapeHtml(formatJson(data))}</pre>
+        </div>
+      `;
+
+      getElement("couponCode").value = "";
+      getElement("couponRewardAmount").value = "";
+
+      await loadAuditLogs();
+    });
+  } catch (error) {
+    writeOutput("couponsOutput", error.message);
+  }
+};
+
+const loadCouponRedemptions = async () => {
+  try {
+    await withLoadingButton("loadCouponsBtn", "Loading Coupons...", async () => {
+      const output = getElement("couponsOutput");
+      if (output) output.innerHTML = "Loading coupon redemptions...";
+
+      const data = await requestAdminApi("/admin/coupon-redemptions");
+      couponManagementState.redemptions =
+        data?.redemptions || data?.couponRedemptions || [];
+
+      renderCouponRedemptionsTable();
+    });
+  } catch (error) {
+    writeOutput("couponsOutput", error.message);
+  }
+};
+
+const renderCouponRedemptionsTable = () => {
+  const container = getElement("couponsOutput");
+  if (!container) return;
+
+  const search = couponManagementState.search.trim().toLowerCase();
+
+  const rowsData = couponManagementState.redemptions.filter((r) => {
+    if (!search) return true;
+
+    return [
+      r.id,
+      r.couponId,
+      r.couponCode,
+      r.code,
+      r.userId,
+      r.userEmail,
+      r.rewardType,
+    ].some((v) => String(v ?? "").toLowerCase().includes(search));
+  });
+
+  if (rowsData.length === 0) {
+    container.innerHTML = "<p>No coupon redemptions found.</p>";
+    return;
+  }
+
+  const rows = rowsData
+    .map((r, index) => {
+      const rowBackground = index % 2 === 0 ? "#ffffff" : "#f8fafc";
+      const code = r.couponCode || r.code || r.coupon?.code || "-";
+      const rewardType = r.rewardType || r.coupon?.rewardType || "-";
+      const rewardAmount = r.rewardAmount ?? r.coupon?.rewardAmount ?? "-";
+      const user = r.userEmail || r.email || r.userId || "-";
+
+      return `
+        <tr style="background:${rowBackground};">
+          <td style="padding:12px;border:1px solid #e5e7eb;">
+            <strong>${escapeHtml(code)}</strong><br>
+            <span style="color:#64748b;font-size:12px;">${escapeHtml(shortText(r.id, 28))}</span>
+          </td>
+          <td style="padding:12px;border:1px solid #e5e7eb;">${escapeHtml(shortText(user, 36))}</td>
+          <td style="padding:12px;border:1px solid #e5e7eb;">${escapeHtml(rewardType)} / ${escapeHtml(rewardAmount)}</td>
+          <td style="padding:12px;border:1px solid #e5e7eb;white-space:nowrap;">${escapeHtml(formatDateTime(r.createdAt))}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  container.innerHTML = `
+    <div style="margin-top:16px;padding:16px;border:1px solid #e5e7eb;border-radius:14px;background:#f8fafc;">
+      <label style="display:grid;gap:6px;font-weight:700;max-width:360px;">
+        Search
+        <input
+          value="${escapeHtml(couponManagementState.search)}"
+          oninput="setCouponSearch(this.value)"
+          placeholder="Code, user, redemption ID"
+          style="padding:10px;border:1px solid #d1d5db;border-radius:10px;"
+        />
+      </label>
+    </div>
+
+    <div style="margin-top:14px;overflow:auto;border:1px solid #dbe3ef;border-radius:14px;">
+      <table style="width:100%;border-collapse:collapse;min-width:800px;">
+        <thead>
+          <tr style="background:#f8fafc;">
+            <th style="text-align:left;padding:12px;border:1px solid #e5e7eb;">Coupon</th>
+            <th style="text-align:left;padding:12px;border:1px solid #e5e7eb;">User</th>
+            <th style="text-align:left;padding:12px;border:1px solid #e5e7eb;">Reward</th>
+            <th style="text-align:left;padding:12px;border:1px solid #e5e7eb;">Redeemed</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+};
+
+window.setCouponSearch = (value) => {
+  couponManagementState.search = value;
+  renderCouponRedemptionsTable();
+};
+
+const renderOperationsCards = (title, data) => {
+  const output = getElement("operationsOutput");
+  if (!output) return;
+
+  const entries = Object.entries(data || {});
+
+  if (entries.length === 0) {
+    output.innerHTML = `<p>No ${escapeHtml(title.toLowerCase())} data found.</p>`;
+    return;
+  }
+
+  const cards = entries
+    .map(([key, value]) => {
+      const isObject = value && typeof value === "object";
+
+      return `
+        <div style="border:1px solid #e5e7eb;border-radius:14px;background:#ffffff;padding:16px;">
+          <div style="font-size:13px;color:#64748b;font-weight:800;text-transform:uppercase;">
+            ${escapeHtml(key)}
+          </div>
+          <div style="margin-top:10px;color:#0f172a;font-size:${isObject ? "13px" : "28px"};font-weight:${isObject ? "500" : "900"};">
+            ${
+              isObject
+                ? `<pre style="white-space:pre-wrap;margin:0;">${escapeHtml(formatJson(value))}</pre>`
+                : escapeHtml(value)
+            }
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  output.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+      <strong style="font-size:16px;color:#334155;">${escapeHtml(title)}</strong>
+      <span style="color:#64748b;font-size:13px;">Last refreshed: ${escapeHtml(formatDateTime(new Date().toISOString()))}</span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;">
+      ${cards}
+    </div>
+  `;
+};
+
+const loadQueueMetrics = async () => {
+  try {
+    await withLoadingButton("loadQueuesBtn", "Loading Queues...", async () => {
+      const output = getElement("operationsOutput");
+      if (output) output.innerHTML = "Loading queue metrics...";
+
+      const data = await requestAdminApi("/admin/metrics/queues");
+
+      const queues = data?.queues || [];
+
+      const cards = queues.map((queue) => {
+        const counts = queue.counts || {};
+        const latency = queue.latency || {};
+
+        return `
+          <div style="
+            border:1px solid #e5e7eb;
+            border-radius:14px;
+            background:#ffffff;
+            padding:16px;
+          ">
+            <h4 style="margin-bottom:12px;">
+              ${escapeHtml(queue.name || queue.key)}
+            </h4>
+
+            <div style="
+              display:grid;
+              grid-template-columns:repeat(3,1fr);
+              gap:10px;
+              margin-bottom:16px;
+            ">
+              <div><strong>${counts.waiting ?? 0}</strong><br>Waiting</div>
+              <div><strong>${counts.active ?? 0}</strong><br>Active</div>
+              <div><strong>${counts.completed ?? 0}</strong><br>Completed</div>
+              <div><strong>${counts.failed ?? 0}</strong><br>Failed</div>
+              <div><strong>${counts.delayed ?? 0}</strong><br>Delayed</div>
+              <div><strong>${counts.paused ?? 0}</strong><br>Paused</div>
+            </div>
+
+            <div style="
+              border-top:1px solid #e5e7eb;
+              padding-top:12px;
+              color:#64748b;
+              font-size:13px;
+            ">
+              Avg Wait: ${latency.avgWaitMs ?? 0} ms<br>
+              Avg Processing: ${latency.avgProcessingMs ?? 0} ms
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      output.innerHTML = `
+        <div style="margin-bottom:12px;">
+          <strong>Queue Metrics</strong>
+          <span style="float:right;color:#64748b;">
+            ${escapeHtml(formatDateTime(data.generatedAt))}
+          </span>
+        </div>
+
+        <div style="
+          display:grid;
+          grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
+          gap:16px;
+        ">
+          ${cards}
+        </div>
+      `;
+    });
+  } catch (error) {
+    writeOutput("operationsOutput", error.message);
+  }
+};
+
+const loadWorkerMetrics = async () => {
+  try {
+    await withLoadingButton("loadWorkersBtn", "Loading Workers...", async () => {
+      const output = getElement("operationsOutput");
+      if (output) output.innerHTML = "Loading worker metrics...";
+
+      const data = await requestAdminApi("/admin/metrics/workers");
+      const workers = data?.workers || data?.workerMetrics || [];
+
+      if (!output) return;
+
+      if (workers.length === 0) {
+        output.innerHTML = "<p>No worker metrics found.</p>";
+        return;
+      }
+
+      const cards = workers
+        .map((worker) => {
+          const name = worker.name || worker.key || worker.workerName || "Worker";
+          const status = worker.status || worker.state || (worker.isRunning ? "running" : "unknown");
+          const queueName = worker.queueName || worker.queue || worker.queueKey || "-";
+          const concurrency = worker.concurrency ?? worker.workerConcurrency ?? "-";
+          const processed = worker.processed ?? worker.completed ?? worker.completedCount ?? 0;
+          const failed = worker.failed ?? worker.failedCount ?? 0;
+          const active = worker.active ?? worker.activeCount ?? 0;
+          const lastHeartbeat = worker.lastHeartbeat || worker.lastSeenAt || worker.updatedAt || worker.createdAt || data.generatedAt;
+          const statusColor = status === "running" || status === "active" || status === "healthy" ? "#16a34a" : status === "unknown" ? "#64748b" : "#dc2626";
+
+          return `
+            <div style="border:1px solid #e5e7eb;border-radius:14px;background:#ffffff;padding:16px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;">
+                <h4 style="margin:0;">${escapeHtml(name)}</h4>
+                <span style="display:inline-block;padding:5px 10px;border-radius:999px;background:#f8fafc;color:${statusColor};border:1px solid #e5e7eb;font-weight:800;font-size:12px;">
+                  ${escapeHtml(status)}
+                </span>
+              </div>
+
+              <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px;">
+                <div><strong>${escapeHtml(queueName)}</strong><br><span style="color:#64748b;font-size:12px;">Queue</span></div>
+                <div><strong>${escapeHtml(concurrency)}</strong><br><span style="color:#64748b;font-size:12px;">Concurrency</span></div>
+                <div><strong>${escapeHtml(active)}</strong><br><span style="color:#64748b;font-size:12px;">Active</span></div>
+                <div><strong>${escapeHtml(processed)}</strong><br><span style="color:#64748b;font-size:12px;">Processed</span></div>
+                <div><strong>${escapeHtml(failed)}</strong><br><span style="color:#64748b;font-size:12px;">Failed</span></div>
+              </div>
+
+              <div style="border-top:1px solid #e5e7eb;padding-top:12px;color:#64748b;font-size:13px;">
+                Last heartbeat: ${escapeHtml(formatDateTime(lastHeartbeat))}
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+
+      output.innerHTML = `
+        <div style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+          <strong>Worker Metrics</strong>
+          <span style="color:#64748b;">${escapeHtml(formatDateTime(data.generatedAt))}</span>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;">
+          ${cards}
+        </div>
+      `;
+    });
+  } catch (error) {
+    writeOutput("operationsOutput", error.message);
+  }
 };
 
 const loadUsers = async () => {
@@ -1962,6 +2291,10 @@ const bindEvents = () => {
     "loadUsersBtn",
     "loadDashboardBtn",
     "loadReportsBtn",
+    "createCouponBtn",
+    "loadCouponsBtn",
+    "loadQueuesBtn",
+    "loadWorkersBtn",
   ].forEach((id) => {
     const btn = getElement(id);
     if (btn) {
@@ -1981,6 +2314,12 @@ const bindEvents = () => {
   getElement("loadUsersBtn")?.addEventListener("click", loadUsers);
   getElement("loadReportsBtn")?.addEventListener("click", loadReports);
   getElement("loadDashboardBtn")?.addEventListener("click", loadDashboardMetrics);
+
+  getElement("createCouponBtn")?.addEventListener("click", createCoupon);
+  getElement("loadCouponsBtn")?.addEventListener("click", loadCouponRedemptions);
+
+  getElement("loadQueuesBtn")?.addEventListener("click", loadQueueMetrics);
+  getElement("loadWorkersBtn")?.addEventListener("click", loadWorkerMetrics);
 
 };
 

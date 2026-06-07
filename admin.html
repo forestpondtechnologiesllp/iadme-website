@@ -230,6 +230,71 @@
   </div>
 </div>
 
+
+<div class="page-card" style="margin-top:24px;">
+  <h3>Coupon Management</h3>
+
+  <p>
+    Create coupons, review coupon status and manage coupon activation for wallet or reward campaigns.
+  </p>
+
+  <div style="margin-top:20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;align-items:end;">
+    <label style="display:grid;gap:6px;font-weight:700;">
+      Coupon Code
+      <input id="couponCode" type="text" placeholder="WELCOME100" style="padding:12px;border:1px solid #d1d5db;border-radius:8px;" />
+    </label>
+
+    <label style="display:grid;gap:6px;font-weight:700;">
+      Reward Type
+      <select id="couponRewardType" style="padding:12px;border:1px solid #d1d5db;border-radius:8px;">
+            <option value="wallet_credit">Wallet Credit</option>
+      </select>
+    </label>
+
+    <label style="display:grid;gap:6px;font-weight:700;">
+      Reward Amount
+      <input id="couponRewardAmount" type="number" min="1" placeholder="100" style="padding:12px;border:1px solid #d1d5db;border-radius:8px;" />
+    </label>
+
+    <label style="display:grid;gap:6px;font-weight:700;">
+      Currency
+      <input id="couponCurrency" type="text" value="INR" style="padding:12px;border:1px solid #d1d5db;border-radius:8px;" />
+    </label>
+  </div>
+
+  <div style="margin-top:16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;">
+    <button class="button" id="createCouponBtn" type="button">
+      Create Coupon
+    </button>
+
+    <button class="button" id="loadCouponsBtn" type="button" style="background:#64748b;box-shadow:none;">
+      Load Coupon Redemptions
+    </button>
+  </div>
+
+  <div id="couponsOutput" style="margin-top:20px;overflow:auto;"></div>
+</div>
+
+<div class="page-card" style="margin-top:24px;">
+  <h3>Operations Health</h3>
+
+  <p>
+    Monitor queue depth, failed jobs and worker heartbeat status for production operations.
+  </p>
+
+  <div style="margin-top:16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;">
+    <button class="button" id="loadQueuesBtn" type="button">
+      Load Queue Metrics
+    </button>
+
+    <button class="button" id="loadWorkersBtn" type="button" style="background:#64748b;box-shadow:none;">
+      Load Worker Metrics
+    </button>
+  </div>
+
+  <div id="operationsOutput" style="margin-top:20px;overflow:auto;"></div>
+</div>
+
     </div>
   </main>
 
