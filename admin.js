@@ -365,35 +365,153 @@ window.showReportDetails = async (videoId, reportId) => {
 
   try {
     const video = await requestAdminApi(`/admin/videos/${videoId}`);
-
-    output.innerHTML = `
-      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:16px;">
-        <strong style="font-size:18px;color:#5b21b6;">Report ${escapeHtml(shortText(reportId, 18))}</strong>
-        <button onclick="closeSelectedReportPanel()" style="padding:8px 12px;border-radius:9px;border:1px solid #6d28d9;background:#6d28d9;color:white;font-weight:800;cursor:pointer;">
-          Close Details ×
-        </button>
-      </div>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;">
-        <div>
-          <p><strong>Report ID:</strong> ${escapeHtml(reportId)}</p>
-          <p><strong>Video ID:</strong> ${escapeHtml(videoId)}</p>
-          <p><strong>Title:</strong> ${escapeHtml(video.video?.title ?? "")}</p>
-          <p><strong>Owner:</strong> ${escapeHtml(video.owner?.email ?? "")}</p>
-          <p><strong>Status:</strong> ${escapeHtml(video.video?.playbackStatus ?? "")}</p>
-          <p><strong>Visibility:</strong> ${escapeHtml(video.video?.visibility ?? "")}</p>
-          <p><strong>Description:</strong> ${escapeHtml(video.video?.description ?? "")}</p>
-        </div>
-
-        <div style="border:1px solid #e5e7eb;border-radius:12px;background:white;padding:16px;">
-          <h4 style="margin-bottom:10px;">Video Stats</h4>
-          <pre style="overflow:auto;">${escapeHtml(formatJson(video.stats ?? {}))}</pre>
-        </div>
-      </div>
-    `;
+    renderSelectedReportDetails(videoId, reportId, video);
   } catch (error) {
     output.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
   }
+};
+
+const renderSelectedReportDetails = (videoId, reportId, video) => {
+  const output = getElement("selectedReportOutput");
+  if (!output) return;
+
+  const isDeleted = Boolean(video.video?.deletedAt);
+
+  output.innerHTML = `
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:16px;">
+      <strong style="font-size:18px;color:#5b21b6;">Report ${escapeHtml(shortText(reportId, 18))}</strong>
+      <button onclick="closeSelectedReportPanel()" style="padding:8px 12px;border-radius:9px;border:1px solid #6d28d9;background:#6d28d9;color:white;font-weight:800;cursor:pointer;">
+        Close Details ×
+      </button>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px;">
+      <button onclick="refreshReportDetails('${escapeHtml(videoId)}','${escapeHtml(reportId)}')" style="padding:9px 13px;border-radius:10px;border:1px solid #8b5cf6;background:#fff;color:#5b21b6;font-weight:800;cursor:pointer;">
+        Refresh Details
+      </button>
+      <button onclick="loadReportVideoComments('${escapeHtml(videoId)}')" style="padding:9px 13px;border-radius:10px;border:1px solid #0f766e;background:#ecfdf5;color:#0f766e;font-weight:800;cursor:pointer;">
+        Load Comments
+      </button>
+      ${isDeleted
+        ? `<button onclick="restoreReportVideo('${escapeHtml(videoId)}','${escapeHtml(reportId)}')" style="padding:9px 13px;border-radius:10px;border:1px solid #16a34a;background:#16a34a;color:white;font-weight:800;cursor:pointer;">Restore Video</button>`
+        : `<button onclick="deleteReportVideo('${escapeHtml(videoId)}','${escapeHtml(reportId)}')" style="padding:9px 13px;border-radius:10px;border:1px solid #dc2626;background:#dc2626;color:white;font-weight:800;cursor:pointer;">Delete Video</button>`
+      }
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;">
+      <div>
+        <p><strong>Report ID:</strong> ${escapeHtml(reportId)}</p>
+        <p><strong>Video ID:</strong> ${escapeHtml(videoId)}</p>
+        <p><strong>Title:</strong> ${escapeHtml(video.video?.title ?? "")}</p>
+        <p><strong>Owner:</strong> ${escapeHtml(video.owner?.email ?? "")}</p>
+        <p><strong>Status:</strong> ${escapeHtml(video.video?.playbackStatus ?? "")}</p>
+        <p><strong>Visibility:</strong> ${escapeHtml(video.video?.visibility ?? "")}</p>
+        <p><strong>Deleted:</strong> ${isDeleted ? escapeHtml(video.video?.deletedAt) : "No"}</p>
+        <p><strong>Description:</strong> ${escapeHtml(video.video?.description ?? "")}</p>
+      </div>
+
+      <div style="border:1px solid #e5e7eb;border-radius:12px;background:white;padding:16px;">
+        <h4 style="margin-bottom:10px;">Video Stats</h4>
+        <pre style="overflow:auto;">${escapeHtml(formatJson(video.stats ?? {}))}</pre>
+      </div>
+    </div>
+
+    <div id="selectedReportComments" style="margin-top:20px;"></div>
+  `;
+};
+
+window.refreshReportDetails = async (videoId, reportId) => {
+  await window.showReportDetails(videoId, reportId);
+};
+
+window.deleteReportVideo = async (videoId, reportId) => {
+  if (!confirm("Delete this video? This will soft-delete it from feeds.")) return;
+  await requestAdminApi(`/admin/videos/${videoId}/delete`, { method: "POST" });
+  await window.showReportDetails(videoId, reportId);
+  await loadAuditLogs();
+  await loadDashboardMetrics();
+};
+
+window.restoreReportVideo = async (videoId, reportId) => {
+  if (!confirm("Restore this video?")) return;
+  await requestAdminApi(`/admin/videos/${videoId}/restore`, { method: "POST" });
+  await window.showReportDetails(videoId, reportId);
+  await loadAuditLogs();
+  await loadDashboardMetrics();
+};
+
+window.loadReportVideoComments = async (videoId) => {
+  const commentsContainer = getElement("selectedReportComments");
+  if (!commentsContainer) return;
+
+  commentsContainer.innerHTML = "Loading comments...";
+
+  try {
+    const data = await requestAdminApi(`/admin/comments?videoId=${encodeURIComponent(videoId)}`);
+    const comments = data?.comments || [];
+
+    if (comments.length === 0) {
+      commentsContainer.innerHTML = "<p>No comments found for this reported video.</p>";
+      return;
+    }
+
+    const rows = comments
+      .map((comment, index) => {
+        const rowBackground = index % 2 === 0 ? "#ffffff" : "#f8fafc";
+        const isReply = Boolean(comment.parentCommentId);
+        const deletedLabel = comment.deletedAt ? `Deleted: ${escapeHtml(formatDateTime(comment.deletedAt))}` : "Active";
+
+        return `
+          <tr style="background:${rowBackground};">
+            <td style="padding:10px;border:1px solid #e5e7eb;">${isReply ? "↳ Reply" : "Comment"}</td>
+            <td style="padding:10px;border:1px solid #e5e7eb;">${escapeHtml(comment.text)}</td>
+            <td style="padding:10px;border:1px solid #e5e7eb;">${escapeHtml(comment.userDisplayName || comment.userEmail)}</td>
+            <td style="padding:10px;border:1px solid #e5e7eb;">${escapeHtml(deletedLabel)}</td>
+            <td style="padding:10px;border:1px solid #e5e7eb;white-space:nowrap;">
+              ${comment.deletedAt
+                ? "-"
+                : `<button onclick="deleteReportComment('${escapeHtml(comment.id)}','${escapeHtml(videoId)}')" style="padding:8px 12px;border-radius:9px;border:1px solid #dc2626;background:#dc2626;color:white;font-weight:800;cursor:pointer;">Delete</button>`
+              }
+            </td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    commentsContainer.innerHTML = `
+      <h4 style="margin-bottom:10px;">Comments on Reported Video</h4>
+      <div style="overflow:auto;border:1px solid #dbe3ef;border-radius:14px;">
+        <table style="width:100%;border-collapse:collapse;min-width:900px;">
+          <thead>
+            <tr style="background:#f8fafc;">
+              <th style="text-align:left;padding:12px;border:1px solid #e5e7eb;">Type</th>
+              <th style="text-align:left;padding:12px;border:1px solid #e5e7eb;">Comment</th>
+              <th style="text-align:left;padding:12px;border:1px solid #e5e7eb;">User</th>
+              <th style="text-align:left;padding:12px;border:1px solid #e5e7eb;">Status</th>
+              <th style="text-align:left;padding:12px;border:1px solid #e5e7eb;">Action</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+  } catch (error) {
+    commentsContainer.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
+  }
+};
+
+window.deleteReportComment = async (commentId, videoId) => {
+  const reason = prompt("Reason for deleting this comment?", "Admin moderation");
+  if (reason === null) return;
+
+  await requestAdminApi(`/admin/comments/${commentId}/delete`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+
+  await window.loadReportVideoComments(videoId);
+  await loadAuditLogs();
+  await loadDashboardMetrics();
 };
 
 window.closeSelectedReportPanel = () => {
