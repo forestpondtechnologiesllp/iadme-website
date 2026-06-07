@@ -103,6 +103,25 @@
       </div>
 
       <div class="page-card" style="margin-top:24px;">
+        <h3>Report Queue</h3>
+
+        <p>
+          Review open video reports and take moderation actions.
+        </p>
+
+        <button class="button" id="loadReportsBtn">
+          Load Reports
+        </button>
+
+        <div id="reportsOutput" style="margin-top:20px; overflow:auto;"></div>
+
+        <div id="selectedReportPanel" style="display:none;margin-top:24px;padding:20px;border:1px solid #e5e7eb;border-radius:14px;background:#f8fafc;">
+          <h4 style="font-size:20px;margin-bottom:12px;">Selected Report Details</h4>
+          <div id="selectedReportOutput"></div>
+        </div>
+      </div>
+
+      <div class="page-card" style="margin-top:24px;">
         <h3>Audit Logs</h3>
 
         <button class="button" id="loadAuditBtn">
