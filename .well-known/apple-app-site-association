@@ -1,0 +1,28 @@
+
+
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": [
+          "KU58Q677M3.app.iadme.mobile"
+        ],
+        "components": [
+          {
+            "/": "/v/*",
+            "comment": "Matches iAdMe short video share links"
+          },
+          {
+            "/": "/video/*",
+            "comment": "Matches iAdMe video deep links"
+          },
+          {
+            "/": "/profiles/*",
+            "comment": "Matches iAdMe public profile links"
+          }
+        ]
+      }
+    ]
+  }
+}
