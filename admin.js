@@ -147,8 +147,8 @@ const writeOutput = (id, value) => {
 const reportQueueState = {
   reports: [],
   page: 1,
-  pageSize: 50,
-  sortKey: "createdAt",
+  pageSize: 25,
+  sortKey: "openReportsCount",
   sortDirection: "desc",
   expanded: true,
 };
@@ -1759,8 +1759,8 @@ const loadReports = async () => {
         container.innerHTML = "Loading reports...";
       }
 
-      const data = await requestAdminApi("/admin/reports/videos");
-      reportQueueState.reports = data?.reports || [];
+      const data = await requestAdminApi("/admin/reports/videos/summary");
+      reportQueueState.reports = data?.summaries || [];
       reportQueueState.page = 1;
       reportQueueState.expanded = true;
       renderReportsTable();
@@ -1811,37 +1811,48 @@ const renderReportsTable = () => {
     return reportQueueState.sortDirection === "asc" ? "↑" : "↓";
   };
 
-  const rows = pageReports
-    .map((report, index) => {
-      const rowBackground = index % 2 === 0 ? "#ffffff" : "#f8fafc";
-      const statusColor = report.status === "open" ? "#f97316" : report.status === "resolved" ? "#16a34a" : "#64748b";
+const rows = pageReports
+  .map((report, index) => {
+    const rowBackground = index % 2 === 0 ? "#ffffff" : "#f8fafc";
+    const isDeleted = Boolean(report.deletedAt);
 
-      return `
-        <tr style="background:${rowBackground};">
-          <td style="padding:10px;border:1px solid #e5e7eb;">
-            <span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#fff7ed;color:${statusColor};border:1px solid #fed7aa;font-weight:800;font-size:12px;">
-              ${escapeHtml(report.status)}
-            </span>
-          </td>
-          <td style="padding:10px;border:1px solid #e5e7eb;">${escapeHtml(report.reasonCode)}</td>
-          <td style="padding:10px;border:1px solid #e5e7eb;" title="${escapeHtml(report.userId)}">${escapeHtml(shortText(report.userId, 24))}</td>
-          <td style="padding:10px;border:1px solid #e5e7eb;" title="${escapeHtml(report.videoId)}">${escapeHtml(shortText(report.videoId, 26))}</td>
-          <td style="padding:10px;border:1px solid #e5e7eb;white-space:nowrap;">${escapeHtml(formatDateTime(report.createdAt))}</td>
-          <td style="padding:10px;border:1px solid #e5e7eb;white-space:nowrap;">
-            <button onclick="showReportDetails('${escapeHtml(report.videoId)}','${escapeHtml(report.id)}')" style="padding:8px 12px;border-radius:9px;border:1px solid #8b5cf6;background:#fff;color:#5b21b6;font-weight:800;cursor:pointer;">
-              View
-            </button>
-            <button onclick="resolveReport('${escapeHtml(report.id)}')" style="padding:8px 12px;border-radius:9px;border:1px solid #16a34a;background:#16a34a;color:white;font-weight:800;cursor:pointer;margin-left:6px;">
-              Resolve
-            </button>
-            <button onclick="dismissReport('${escapeHtml(report.id)}')" style="padding:8px 12px;border-radius:9px;border:1px solid #f97316;background:#fff7ed;color:#c2410c;font-weight:800;cursor:pointer;margin-left:6px;">
-              Dismiss
-            </button>
-          </td>
-        </tr>
-      `;
-    })
-    .join("");
+    const thumbnail = report.thumbnailUrl
+      ? `<img src="${escapeHtml(report.thumbnailUrl)}" alt="thumbnail" style="width:58px;height:78px;object-fit:cover;border-radius:10px;background:#0f172a;" />`
+      : `<div style="width:58px;height:78px;display:grid;place-items:center;border-radius:10px;background:#e5e7eb;color:#64748b;font-size:11px;">No image</div>`;
+
+    const reasons = Object.entries(report.reasonSummary || {})
+      .map(([reason, count]) => `${escapeHtml(reason)}: ${escapeHtml(count)}`)
+      .join("<br>") || "-";
+
+    return `
+      <tr style="background:${rowBackground};">
+        <td style="padding:10px;border:1px solid #e5e7eb;">${thumbnail}</td>
+        <td style="padding:10px;border:1px solid #e5e7eb;">
+          <strong>${escapeHtml(shortText(report.title || "Untitled", 42))}</strong><br>
+          <span style="color:#64748b;font-size:12px;">${escapeHtml(shortText(report.videoId, 28))}</span><br>
+          <span style="color:${isDeleted ? "#dc2626" : "#16a34a"};font-size:12px;font-weight:800;">
+            ${isDeleted ? "deleted" : escapeHtml(report.visibility)}
+          </span>
+        </td>
+        <td style="padding:10px;border:1px solid #e5e7eb;">${escapeHtml(shortText(report.ownerEmail, 32))}</td>
+        <td style="padding:10px;border:1px solid #e5e7eb;">
+          <strong>${escapeHtml(report.openReportsCount)} open</strong><br>
+          Total: ${escapeHtml(report.totalReportsCount)}<br>
+          Unique: ${escapeHtml(report.uniqueReportersCount)}<br>
+          Resolved: ${escapeHtml(report.resolvedReportsCount)}<br>
+          Dismissed: ${escapeHtml(report.dismissedReportsCount)}
+        </td>
+        <td style="padding:10px;border:1px solid #e5e7eb;">${reasons}</td>
+        <td style="padding:10px;border:1px solid #e5e7eb;white-space:nowrap;">${escapeHtml(formatDateTime(report.lastReportedAt))}</td>
+        <td style="padding:10px;border:1px solid #e5e7eb;white-space:nowrap;">
+          <button onclick="showReportDetails('${escapeHtml(report.videoId)}','${escapeHtml(report.videoId)}')" style="padding:8px 12px;border-radius:9px;border:1px solid #8b5cf6;background:#fff;color:#5b21b6;font-weight:800;cursor:pointer;">
+            Review
+          </button>
+        </td>
+      </tr>
+    `;
+  })
+  .join("");
 
   container.innerHTML = `
     <div style="margin-top:16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;">
@@ -1864,12 +1875,12 @@ const renderReportsTable = () => {
       <table style="width:100%;border-collapse:collapse;min-width:980px;">
         <thead>
           <tr style="background:#f8fafc;">
-            <th onclick="sortReports('status')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">Status ${sortIcon("status")}</th>
-            <th onclick="sortReports('reasonCode')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">Reason ${sortIcon("reasonCode")}</th>
-            <th onclick="sortReports('userId')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">Reporter ${sortIcon("userId")}</th>
-            <th onclick="sortReports('videoId')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">Video ${sortIcon("videoId")}</th>
-            <th onclick="sortReports('createdAt')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">Created ${sortIcon("createdAt")}</th>
-            <th style="text-align:left;padding:12px;border:1px solid #e5e7eb;">Actions</th>
+<th style="text-align:left;padding:12px;border:1px solid #e5e7eb;">Thumbnail</th>
+<th onclick="sortReports('title')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">Video ${sortIcon("title")}</th>
+<th onclick="sortReports('ownerEmail')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">Owner ${sortIcon("ownerEmail")}</th>
+<th onclick="sortReports('openReportsCount')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">Reports ${sortIcon("openReportsCount")}</th>
+<th style="text-align:left;padding:12px;border:1px solid #e5e7eb;">Reasons</th>
+<th onclick="sortReports('lastReportedAt')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">Last Reported ${sortIcon("lastReportedAt")}</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -1942,20 +1953,64 @@ window.showReportDetails = async (videoId, reportId) => {
   output.innerHTML = "Loading report details...";
 
   try {
-    const video = await requestAdminApi(`/admin/videos/${videoId}`);
-    renderSelectedReportDetails(videoId, reportId, video);
+const video = await requestAdminApi(`/admin/videos/${videoId}`);
+
+const reportSummary = reportQueueState.reports.find(
+  (r) => r.videoId === videoId
+);
+
+renderSelectedReportDetails(
+  videoId,
+  reportId,
+  video,
+  reportSummary
+);
   } catch (error) {
     output.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
   }
 };
 
-const renderSelectedReportDetails = (videoId, reportId, video) => {
+const renderSelectedReportDetails = (
+  videoId,
+  reportId,
+  video,
+  reportSummary
+) => {
   const output = getElement("selectedReportOutput");
   if (!output) return;
 
   const isDeleted = Boolean(video.video?.deletedAt);
   const playbackUrl = video.video?.hlsUrl || video.video?.playbackUrl || "";
   const thumbnailUrl = video.video?.thumbnailUrl || "";
+  const reasonRows = Object.entries(
+  reportSummary?.reasonSummary || {}
+)
+  .map(
+    ([reason, count]) =>
+      `${escapeHtml(reason)}: ${escapeHtml(count)}`
+  )
+  .join("<br>") || "-";
+
+  const reportRows = (video.reports || [])
+  .map(
+    (report) => `
+      <tr>
+        <td style="padding:10px;border:1px solid #e5e7eb;">
+          ${escapeHtml(report.status)}
+        </td>
+        <td style="padding:10px;border:1px solid #e5e7eb;">
+          ${escapeHtml(report.reasonCode)}
+        </td>
+        <td style="padding:10px;border:1px solid #e5e7eb;">
+          ${escapeHtml(report.reporterEmail || "-")}
+        </td>
+        <td style="padding:10px;border:1px solid #e5e7eb;">
+          ${escapeHtml(formatDateTime(report.createdAt))}
+        </td>
+      </tr>
+    `
+  )
+  .join("");
 
   output.innerHTML = `
     <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:16px;">
@@ -2012,15 +2067,23 @@ const renderSelectedReportDetails = (videoId, reportId, video) => {
 
       <div style="display:grid;gap:16px;">
         <div style="border:1px solid #e5e7eb;border-radius:12px;background:white;padding:16px;">
-          <h4 style="margin-bottom:10px;">Video Review</h4>
-          <p><strong>Report ID:</strong> ${escapeHtml(reportId)}</p>
-          <p><strong>Video ID:</strong> ${escapeHtml(videoId)}</p>
-          <p><strong>Title:</strong> ${escapeHtml(video.video?.title ?? "")}</p>
-          <p><strong>Owner:</strong> ${escapeHtml(video.owner?.email ?? "")}</p>
-          <p><strong>Status:</strong> ${escapeHtml(video.video?.playbackStatus ?? "")}</p>
-          <p><strong>Visibility:</strong> ${escapeHtml(video.video?.visibility ?? "")}</p>
-          <p><strong>Deleted:</strong> ${isDeleted ? escapeHtml(video.video?.deletedAt) : "No"}</p>
-          <p><strong>Description:</strong> ${escapeHtml(video.video?.description ?? "")}</p>
+<h4 style="margin-bottom:10px;">Moderation Summary</h4>
+
+<p><strong>Open Reports:</strong> ${escapeHtml(reportSummary?.openReportsCount ?? 0)}</p>
+
+<p><strong>Total Reports:</strong> ${escapeHtml(reportSummary?.totalReportsCount ?? 0)}</p>
+
+<p><strong>Unique Reporters:</strong> ${escapeHtml(reportSummary?.uniqueReportersCount ?? 0)}</p>
+
+<p><strong>Resolved:</strong> ${escapeHtml(reportSummary?.resolvedReportsCount ?? 0)}</p>
+
+<p><strong>Dismissed:</strong> ${escapeHtml(reportSummary?.dismissedReportsCount ?? 0)}</p>
+
+<p><strong>Reasons:</strong><br>${reasonRows}</p>
+
+<p><strong>Last Reported:</strong>
+${escapeHtml(formatDateTime(reportSummary?.lastReportedAt))}
+</p>
         </div>
 
         <div style="border:1px solid #e5e7eb;border-radius:12px;background:white;padding:16px;">
@@ -2036,7 +2099,26 @@ const renderSelectedReportDetails = (videoId, reportId, video) => {
         </div>
       </div>
     </div>
+    
 
+    <div style="margin-top:20px;border:1px solid #e5e7eb;border-radius:12px;padding:16px;background:white;">
+  <h4 style="margin-bottom:10px;">Report History</h4>
+
+  <table style="width:100%;border-collapse:collapse;">
+    <thead>
+      <tr>
+        <th style="text-align:left;padding:10px;border:1px solid #e5e7eb;">Status</th>
+        <th style="text-align:left;padding:10px;border:1px solid #e5e7eb;">Reason</th>
+        <th style="text-align:left;padding:10px;border:1px solid #e5e7eb;">Reporter</th>
+        <th style="text-align:left;padding:10px;border:1px solid #e5e7eb;">Reported At</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${reportRows}
+    </tbody>
+  </table>
+</div>
+    
     <div id="selectedReportComments" style="margin-top:20px;"></div>
   `;
 };
