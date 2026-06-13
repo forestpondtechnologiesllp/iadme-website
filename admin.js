@@ -1013,6 +1013,9 @@ window.showCommentDetails = (commentId) => {
       <button onclick="copyVideoId('${escapeHtml(comment.videoId)}')" style="padding:9px 13px;border-radius:10px;border:1px solid #64748b;background:#fff;color:#334155;font-weight:800;cursor:pointer;">
         Copy Video ID
       </button>
+      <button onclick="showVideoDetails('${escapeHtml(comment.videoId)}')" style="padding:9px 13px;border-radius:10px;border:1px solid #8b5cf6;background:#fff;color:#5b21b6;font-weight:800;cursor:pointer;">
+  Open Video
+</button>
       ${isDeleted
         ? ""
         : `<button onclick="deleteCommentFromTable('${escapeHtml(comment.id)}')" style="padding:9px 13px;border-radius:10px;border:1px solid #dc2626;background:#dc2626;color:white;font-weight:800;cursor:pointer;">Delete Comment</button>`
@@ -1028,6 +1031,8 @@ window.showCommentDetails = (commentId) => {
         <p><strong>Text:</strong> ${escapeHtml(comment.text)}</p>
         <p><strong>Created:</strong> ${escapeHtml(formatDateTime(comment.createdAt))}</p>
         <p><strong>Deleted At:</strong> ${isDeleted ? escapeHtml(formatDateTime(comment.deletedAt)) : "-"}</p>
+        <p><strong>Deleted By:</strong> ${escapeHtml(comment.deletedByType || "-")}</p>
+        <p><strong>Deleted By User ID:</strong> ${escapeHtml(comment.deletedByUserId || "-")}</p>
         <p><strong>Moderation Reason:</strong> ${escapeHtml(comment.moderationReason || "-")}</p>
       </div>
 
@@ -1045,12 +1050,21 @@ window.showCommentDetails = (commentId) => {
 };
 
 window.deleteCommentFromTable = async (commentId) => {
-  const reason = prompt("Reason for deleting this comment?", "Admin moderation");
+  const comment = commentManagementState.comments.find((item) => item.id === commentId);
+  const reason = prompt(
+    `Reason for deleting comment:\n\n${shortText(comment?.text || "this comment", 80)}`,
+    "Admin moderation"
+  );
+
   if (reason === null) return;
+  if (!reason.trim()) {
+    alert("Delete reason is required.");
+    return;
+  }
 
   await requestAdminApi(`/admin/comments/${commentId}/delete`, {
     method: "POST",
-    body: JSON.stringify({ reason }),
+    body: JSON.stringify({ reason: reason.trim() }),
   });
 
   await loadComments();
@@ -1715,9 +1729,15 @@ const renderSelectedUserDetails = (userId, data) => {
         <p><strong>Bio:</strong> ${escapeHtml(profile?.bio || "-")}</p>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-top:12px;">
           <div><strong>${escapeHtml(stats.uploadsCount ?? 0)}</strong><br><span>Uploads</span></div>
-          <div><strong>${escapeHtml(stats.videosCount ?? 0)}</strong><br><span>Videos</span></div>
+          <div><strong>${escapeHtml(stats.videosCount ?? 0)}</strong><br><span>Total Videos</span></div>
+          <div><strong>${escapeHtml(stats.activeVideosCount ?? 0)}</strong><br><span>Active Videos</span></div>
+          <div><strong>${escapeHtml(stats.deletedVideosCount ?? 0)}</strong><br><span>Deleted Videos</span></div>
+          <div><strong>${escapeHtml(stats.publicVideosCount ?? 0)}</strong><br><span>Public Videos</span></div>
+          <div><strong>${escapeHtml(stats.premiumVideosCount ?? 0)}</strong><br><span>Premium Videos</span></div>
           <div><strong>${escapeHtml(stats.commentsCount ?? 0)}</strong><br><span>Comments</span></div>
           <div><strong>${escapeHtml(stats.reportsFiledCount ?? 0)}</strong><br><span>Reports Filed</span></div>
+          <div><strong>${escapeHtml(stats.reportsAgainstVideosCount ?? 0)}</strong><br><span>Reports Against Videos</span></div>
+          <div><strong>${escapeHtml(stats.openReportsAgainstVideosCount ?? 0)}</strong><br><span>Open Reports</span></div>
         </div>
       </div>
     </div>
@@ -2206,10 +2226,14 @@ window.loadReportVideoComments = async (videoId) => {
 window.deleteReportComment = async (commentId, videoId) => {
   const reason = prompt("Reason for deleting this comment?", "Admin moderation");
   if (reason === null) return;
+  if (!reason.trim()) {
+    alert("Delete reason is required.");
+    return;
+  }
 
   await requestAdminApi(`/admin/comments/${commentId}/delete`, {
     method: "POST",
-    body: JSON.stringify({ reason }),
+    body: JSON.stringify({ reason: reason.trim() }),
   });
 
   await window.loadReportVideoComments(videoId);
