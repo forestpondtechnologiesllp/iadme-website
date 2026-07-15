@@ -35,19 +35,20 @@ const getConfig = () => {
 
 const requestAdminApi = async (path, options = {}) => {
   const { baseUrl, token } = getConfig();
+  const { allowConflict, ...fetchOptions } = options;
 
   const response = await fetch(`${baseUrl}${path}`, {
-    ...options,
+    ...fetchOptions,
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
-      ...(options.headers || {}),
+      ...(fetchOptions.headers || {}),
     },
   });
 
   const body = await response.json().catch(() => null);
 
-  if (!response.ok) {
+  if (!response.ok && !(allowConflict && response.status === 409)) {
     const message = body?.error?.message || `Request failed with ${response.status}`;
     throw new Error(message);
   }
@@ -1113,6 +1114,183 @@ const paymentStatusBadge = (status) => {
     colors[normalized] || ["#f8fafc", "#334155", "#e5e7eb"];
 
   return `<span style="display:inline-block;padding:5px 10px;border-radius:999px;background:${background};color:${color};border:1px solid ${border};font-weight:800;font-size:12px;white-space:nowrap;">${escapeHtml(status || "-")}</span>`;
+};
+
+const commerceMetricCard = (label, value, tone = "neutral") => {
+  const tones = {
+    neutral: ["#f8fafc", "#0f172a", "#e2e8f0"],
+    good: ["#f0fdf4", "#166534", "#86efac"],
+    warning: ["#fffbeb", "#92400e", "#fde68a"],
+    bad: ["#fef2f2", "#991b1b", "#fecaca"],
+  };
+  const [background, color, border] = tones[tone] || tones.neutral;
+
+  return `
+    <div style="padding:14px;border:1px solid ${border};border-radius:12px;background:${background};">
+      <div style="font-size:12px;color:#64748b;font-weight:800;text-transform:uppercase;">${escapeHtml(label)}</div>
+      <div style="margin-top:6px;color:${color};font-size:22px;font-weight:900;">${escapeHtml(value)}</div>
+    </div>
+  `;
+};
+
+const loadCommerceDashboard = async () => {
+  try {
+    await withLoadingButton(
+      "loadCommerceDashboardBtn",
+      "Loading Dashboard...",
+      async () => {
+        const output = getElement("commerceDashboardOutput");
+        if (output) output.innerHTML = "Loading commerce dashboard...";
+
+        const data = await requestAdminApi("/admin/payments/dashboard");
+        const orders = data.orders || {};
+        const revenue = data.revenue || {};
+        const wallet = data.wallet || {};
+        const invoices = data.invoices || {};
+        const refunds = data.refunds || {};
+
+        if (output) {
+          output.innerHTML = `
+            <div style="padding:16px;border:1px solid #dbe3ef;border-radius:14px;background:#f8fafc;">
+              <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;">
+                <h4 style="margin:0;font-size:20px;">Commerce Dashboard</h4>
+                <span style="color:#64748b;font-size:13px;">Generated ${escapeHtml(formatDateTime(data.generatedAt))}</span>
+              </div>
+              <div style="margin-top:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;">
+                ${commerceMetricCard("Orders", orders.total ?? 0)}
+                ${commerceMetricCard("Credited", orders.credited ?? 0, "good")}
+                ${commerceMetricCard("Failed", orders.failed ?? 0, orders.failed ? "bad" : "neutral")}
+                ${commerceMetricCard("Gross", formatMoney(revenue.grossAmount, data.currency))}
+                ${commerceMetricCard("Refunded", formatMoney(revenue.refundedAmount, data.currency), refunds.processed ? "warning" : "neutral")}
+                ${commerceMetricCard("Net", formatMoney(revenue.netAmount, data.currency), "good")}
+                ${commerceMetricCard("GST", formatMoney(revenue.gstAmount, data.currency))}
+                ${commerceMetricCard("Net Stars", `${wallet.netStars ?? 0} Stars`)}
+                ${commerceMetricCard("Invoice PDF Failed", invoices.pdfFailed ?? 0, invoices.pdfFailed ? "bad" : "good")}
+                ${commerceMetricCard("Invoice Email Failed", invoices.emailFailed ?? 0, invoices.emailFailed ? "bad" : "good")}
+                ${commerceMetricCard("Refund Reversal Issues", (refunds.insufficientBalance ?? 0) + (refunds.failed ?? 0), (refunds.insufficientBalance || refunds.failed) ? "warning" : "good")}
+              </div>
+            </div>
+          `;
+        }
+      }
+    );
+  } catch (error) {
+    writeOutput("commerceDashboardOutput", error.message);
+  }
+};
+
+const renderReconciliationRows = (rows) => {
+  if (!rows?.length) {
+    return `<p style="margin:8px 0 0;color:#16a34a;font-weight:800;">No rows found.</p>`;
+  }
+
+  return `
+    <div style="margin-top:10px;overflow:auto;border:1px solid #e5e7eb;border-radius:10px;background:white;">
+      <table style="width:100%;border-collapse:collapse;min-width:900px;font-size:13px;">
+        <thead>
+          <tr style="background:#f8fafc;">
+            <th style="text-align:left;padding:9px;border:1px solid #e5e7eb;">Record</th>
+            <th style="text-align:left;padding:9px;border:1px solid #e5e7eb;">Status</th>
+            <th style="text-align:left;padding:9px;border:1px solid #e5e7eb;">Amount</th>
+            <th style="text-align:left;padding:9px;border:1px solid #e5e7eb;">Details</th>
+            <th style="text-align:left;padding:9px;border:1px solid #e5e7eb;">Created</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows
+            .map((row) => {
+              const record =
+                row.payment_order_id ||
+                row.payment_refund_id ||
+                row.invoice_id ||
+                "-";
+              const status =
+                row.financial_status ||
+                row.status ||
+                row.email_status ||
+                row.pdf_status ||
+                "-";
+              const amount =
+                row.amount !== undefined
+                  ? formatMoney(row.amount, "INR")
+                  : row.refunded_amount !== undefined
+                    ? formatMoney(row.refunded_amount, "INR")
+                    : "-";
+              const details = [
+                row.provider_order_id,
+                row.provider_payment_id,
+                row.provider_refund_id,
+                row.invoice_number,
+                row.financial_error,
+                row.email_error,
+                row.pdf_error,
+              ]
+                .filter(Boolean)
+                .join(" / ");
+
+              return `
+                <tr>
+                  <td style="padding:9px;border:1px solid #e5e7eb;" title="${escapeHtml(record)}">${escapeHtml(shortText(record, 34))}</td>
+                  <td style="padding:9px;border:1px solid #e5e7eb;">${paymentStatusBadge(status)}</td>
+                  <td style="padding:9px;border:1px solid #e5e7eb;">${escapeHtml(amount)}</td>
+                  <td style="padding:9px;border:1px solid #e5e7eb;" title="${escapeHtml(details)}">${escapeHtml(shortText(details || "-", 70))}</td>
+                  <td style="padding:9px;border:1px solid #e5e7eb;white-space:nowrap;">${escapeHtml(formatDateTime(row.created_at || row.createdAt))}</td>
+                </tr>
+              `;
+            })
+            .join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+};
+
+const runPaymentReconciliation = async () => {
+  try {
+    await withLoadingButton(
+      "runPaymentReconciliationBtn",
+      "Reconciling...",
+      async () => {
+        const output = getElement("paymentReconciliationOutput");
+        if (output) output.innerHTML = "Running reconciliation...";
+
+        const data = await requestAdminApi("/admin/payments/reconciliation", {
+          allowConflict: true,
+        });
+        const buckets = data.buckets || [];
+        const unhealthy = buckets.filter((bucket) => Number(bucket.count || 0) > 0);
+
+        if (output) {
+          output.innerHTML = `
+            <div style="padding:16px;border:1px solid ${data.healthy ? "#86efac" : "#fecaca"};border-radius:14px;background:${data.healthy ? "#f0fdf4" : "#fef2f2"};">
+              <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;">
+                <h4 style="margin:0;font-size:20px;">Payment Reconciliation</h4>
+                <strong style="color:${data.healthy ? "#166534" : "#991b1b"};">${data.healthy ? "Healthy" : `${unhealthy.length} anomaly groups`}</strong>
+              </div>
+              <p style="margin:8px 0 0;color:#64748b;">Generated ${escapeHtml(formatDateTime(data.generatedAt))}</p>
+              <div style="margin-top:14px;display:grid;gap:12px;">
+                ${buckets
+                  .map(
+                    (bucket) => `
+                      <div style="padding:14px;border:1px solid ${bucket.count ? "#fecaca" : "#bbf7d0"};border-radius:12px;background:white;">
+                        <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;">
+                          <strong>${escapeHtml(bucket.label)}</strong>
+                          <span style="font-weight:900;color:${bucket.count ? "#991b1b" : "#166534"};">${escapeHtml(bucket.count)} rows</span>
+                        </div>
+                        ${renderReconciliationRows(bucket.rows)}
+                      </div>
+                    `
+                  )
+                  .join("")}
+              </div>
+            </div>
+          `;
+        }
+      }
+    );
+  } catch (error) {
+    writeOutput("paymentReconciliationOutput", error.message);
+  }
 };
 
 const loadPayments = async () => {
@@ -2829,6 +3007,8 @@ const bindEvents = () => {
     "loadDashboardBtn",
     "loadReportsBtn",
     "loadPaymentsBtn",
+    "loadCommerceDashboardBtn",
+    "runPaymentReconciliationBtn",
     "createCouponBtn",
     "loadCouponsBtn",
     "loadQueuesBtn",
@@ -2852,6 +3032,8 @@ const bindEvents = () => {
   getElement("loadUsersBtn")?.addEventListener("click", loadUsers);
   getElement("loadReportsBtn")?.addEventListener("click", loadReports);
   getElement("loadPaymentsBtn")?.addEventListener("click", loadPayments);
+  getElement("loadCommerceDashboardBtn")?.addEventListener("click", loadCommerceDashboard);
+  getElement("runPaymentReconciliationBtn")?.addEventListener("click", runPaymentReconciliation);
   getElement("loadDashboardBtn")?.addEventListener("click", loadDashboardMetrics);
 
   getElement("createCouponBtn")?.addEventListener("click", createCoupon);
