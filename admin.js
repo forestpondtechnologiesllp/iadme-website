@@ -202,6 +202,15 @@ const couponManagementState = {
   search: "",
 };
 
+const paymentManagementState = {
+  payments: [],
+  page: 1,
+  pageSize: 10,
+  sortKey: "createdAt",
+  sortDirection: "desc",
+  search: "",
+};
+
 const escapeHtml = (value) =>
   String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -1080,6 +1089,428 @@ window.deleteCommentFromTable = async (commentId) => {
 window.closeSelectedCommentPanel = () => {
   const panel = getElement("selectedCommentPanel");
   const output = getElement("selectedCommentOutput");
+
+  if (panel) panel.style.display = "none";
+  if (output) output.innerHTML = "";
+};
+
+const formatMoney = (amount, currency) => {
+  const value = Number(amount ?? 0) / 100;
+  return `${currency || ""} ${value.toFixed(2)}`.trim();
+};
+
+const paymentStatusBadge = (status) => {
+  const normalized = String(status || "").toLowerCase();
+  const colors = {
+    credited: ["#dcfce7", "#166534", "#86efac"],
+    refunded: ["#fee2e2", "#991b1b", "#fecaca"],
+    partially_refunded: ["#ffedd5", "#9a3412", "#fed7aa"],
+    failed: ["#fee2e2", "#991b1b", "#fecaca"],
+    created: ["#e0f2fe", "#075985", "#bae6fd"],
+    verified: ["#ede9fe", "#5b21b6", "#c4b5fd"],
+  };
+  const [background, color, border] =
+    colors[normalized] || ["#f8fafc", "#334155", "#e5e7eb"];
+
+  return `<span style="display:inline-block;padding:5px 10px;border-radius:999px;background:${background};color:${color};border:1px solid ${border};font-weight:800;font-size:12px;white-space:nowrap;">${escapeHtml(status || "-")}</span>`;
+};
+
+const loadPayments = async () => {
+  try {
+    await withLoadingButton("loadPaymentsBtn", "Loading Payments...", async () => {
+      const output = getElement("paymentsOutput");
+      if (output) output.innerHTML = "Loading payments...";
+
+      const params = new URLSearchParams();
+      const email = getElement("paymentEmailFilter")?.value?.trim();
+      const status = getElement("paymentStatusFilter")?.value?.trim();
+      const providerPaymentId =
+        getElement("paymentProviderPaymentIdFilter")?.value?.trim();
+      const providerOrderId =
+        getElement("paymentProviderOrderIdFilter")?.value?.trim();
+
+      if (email) params.set("email", email);
+      if (status) params.set("status", status);
+      if (providerPaymentId) params.set("providerPaymentId", providerPaymentId);
+      if (providerOrderId) params.set("providerOrderId", providerOrderId);
+
+      const query = params.toString();
+      const data = await requestAdminApi(
+        `/admin/payments${query ? `?${query}` : ""}`
+      );
+
+      paymentManagementState.payments = data?.payments || [];
+      paymentManagementState.search = "";
+      paymentManagementState.page = 1;
+      renderPaymentsTable();
+    });
+  } catch (error) {
+    writeOutput("paymentsOutput", error.message);
+  }
+};
+
+const getPaymentSortValue = (payment, key) => {
+  if (key === "createdAt") return new Date(payment.createdAt ?? 0).getTime();
+  if (key === "user") {
+    return paymentUserLabel(payment).toLowerCase();
+  }
+  if (key === "amount" || key === "totalStars" || key === "refundedAmount") {
+    return Number(payment[key] ?? 0);
+  }
+  return String(payment[key] ?? "").toLowerCase();
+};
+
+const paymentUserLabel = (payment) =>
+  payment.userEmail ||
+  payment.userPhoneNumber ||
+  payment.userDisplayName ||
+  payment.userId ||
+  "-";
+
+const getFilteredPayments = () => {
+  const normalizedSearch = paymentManagementState.search.trim().toLowerCase();
+
+  return paymentManagementState.payments.filter((payment) => {
+    if (!normalizedSearch) return true;
+
+    return [
+      payment.id,
+      payment.userId,
+      payment.userEmail,
+      payment.userPhoneNumber,
+      payment.userDisplayName,
+      payment.providerOrderId,
+      payment.providerPaymentId,
+      payment.starPackCode,
+      payment.status,
+      payment.latestRefundFinancialStatus,
+    ].some((value) =>
+      String(value ?? "").toLowerCase().includes(normalizedSearch)
+    );
+  });
+};
+
+const renderPaymentsTable = () => {
+  const container = getElement("paymentsOutput");
+  if (!container) return;
+
+  if (!getElement("paymentsRowsOutput")) {
+    container.innerHTML = `
+      <div style="margin-top:16px;padding:16px;border:1px solid #e5e7eb;border-radius:14px;background:#f8fafc;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;align-items:end;">
+        <label style="display:grid;gap:6px;font-weight:700;">
+          Search loaded rows
+          <input id="paymentLoadedRowsSearch" value="${escapeHtml(paymentManagementState.search)}" oninput="setPaymentSearch(this.value)" placeholder="Email, phone, user id, payment id, status" style="padding:10px;border:1px solid #d1d5db;border-radius:10px;" />
+        </label>
+
+        <div style="display:flex;gap:10px;align-items:center;">
+          <label style="font-weight:700;">Show</label>
+          <select onchange="changePaymentPageSize(this.value)" style="padding:10px;border:1px solid #d1d5db;border-radius:10px;">
+            <option value="10" ${paymentManagementState.pageSize === 10 ? "selected" : ""}>10</option>
+            <option value="20" ${paymentManagementState.pageSize === 20 ? "selected" : ""}>20</option>
+            <option value="50" ${paymentManagementState.pageSize === 50 ? "selected" : ""}>50</option>
+          </select>
+          <span>entries</span>
+        </div>
+      </div>
+
+      <div id="paymentsRowsOutput"></div>
+    `;
+  }
+
+  renderPaymentRows();
+};
+
+const renderPaymentRows = () => {
+  const container = getElement("paymentsRowsOutput");
+  if (!container) return;
+
+  const payments = [...getFilteredPayments()].sort((a, b) => {
+    const aValue = getPaymentSortValue(a, paymentManagementState.sortKey);
+    const bValue = getPaymentSortValue(b, paymentManagementState.sortKey);
+
+    if (aValue < bValue) return paymentManagementState.sortDirection === "asc" ? -1 : 1;
+    if (aValue > bValue) return paymentManagementState.sortDirection === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(payments.length / paymentManagementState.pageSize)
+  );
+  paymentManagementState.page = Math.min(paymentManagementState.page, totalPages);
+
+  const startIndex =
+    (paymentManagementState.page - 1) * paymentManagementState.pageSize;
+  const pagePayments = payments.slice(
+    startIndex,
+    startIndex + paymentManagementState.pageSize
+  );
+
+  const sortIcon = (key) => {
+    if (paymentManagementState.sortKey !== key) return "↕";
+    return paymentManagementState.sortDirection === "asc" ? "↑" : "↓";
+  };
+
+  const rows = pagePayments.length > 0
+    ? pagePayments.map((payment, index) => {
+      const rowBackground = index % 2 === 0 ? "#ffffff" : "#f8fafc";
+      const refundLabel = payment.refundCount
+        ? `${payment.refundCount} / ${payment.latestRefundFinancialStatus || payment.latestRefundStatus || "-"}`
+        : "-";
+      const userLabel = paymentUserLabel(payment);
+
+      return `
+        <tr style="background:${rowBackground};">
+          <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;">
+            <strong>${escapeHtml(shortText(userLabel, 34))}</strong><br>
+            <span style="color:#64748b;font-size:12px;" title="${escapeHtml(payment.userId)}">${escapeHtml(shortText(payment.userId, 28))}</span>
+          </td>
+          <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;">
+            ${paymentStatusBadge(payment.status)}<br>
+            <span style="font-size:12px;color:#64748b;">${escapeHtml(payment.providerStatus || "-")}</span>
+          </td>
+          <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;">
+            <strong>${escapeHtml(formatMoney(payment.amount, payment.currency))}</strong><br>
+            <span style="color:#64748b;font-size:12px;">Refunded ${escapeHtml(formatMoney(payment.refundedAmount, payment.currency))}</span>
+          </td>
+          <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;">
+            ${escapeHtml(payment.totalStars)} Stars<br>
+            <span style="color:#64748b;font-size:12px;">${escapeHtml(payment.starPackCode || payment.starPackName || "-")}</span>
+          </td>
+          <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;">
+            <span title="${escapeHtml(payment.providerPaymentId || "")}">${escapeHtml(shortText(payment.providerPaymentId || "-", 26))}</span><br>
+            <span style="color:#64748b;font-size:12px;" title="${escapeHtml(payment.providerOrderId || "")}">${escapeHtml(shortText(payment.providerOrderId || "-", 26))}</span>
+          </td>
+          <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;">${escapeHtml(refundLabel)}</td>
+          <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;white-space:nowrap;">${escapeHtml(formatDateTime(payment.createdAt))}</td>
+          <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;white-space:nowrap;">
+            <button onclick="showPaymentDetails('${escapeHtml(payment.id)}')" style="padding:8px 12px;border-radius:9px;border:1px solid #8b5cf6;background:#fff;color:#5b21b6;font-weight:800;cursor:pointer;">
+              View
+            </button>
+          </td>
+        </tr>
+      `;
+    })
+    .join("")
+    : `
+      <tr>
+        <td colspan="8" style="padding:16px;border:1px solid #e5e7eb;color:#64748b;text-align:center;">
+          No payments found for this search.
+        </td>
+      </tr>
+    `;
+
+  container.innerHTML = `
+    <div style="margin-top:14px;overflow:auto;border:1px solid #dbe3ef;border-radius:14px;">
+      <table style="width:100%;border-collapse:collapse;min-width:1200px;font-family:Inter, Arial, sans-serif;line-height:1.35;">
+        <thead>
+          <tr style="background:#f8fafc;">
+            <th onclick="sortPayments('user')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">User ${sortIcon("user")}</th>
+            <th onclick="sortPayments('status')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">Status ${sortIcon("status")}</th>
+            <th onclick="sortPayments('amount')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">Amount ${sortIcon("amount")}</th>
+            <th onclick="sortPayments('totalStars')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">Stars ${sortIcon("totalStars")}</th>
+            <th style="text-align:left;padding:12px;border:1px solid #e5e7eb;">Provider IDs</th>
+            <th style="text-align:left;padding:12px;border:1px solid #e5e7eb;">Refunds</th>
+            <th onclick="sortPayments('createdAt')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">Created ${sortIcon("createdAt")}</th>
+            <th style="text-align:left;padding:12px;border:1px solid #e5e7eb;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+      <span>Showing ${payments.length === 0 ? 0 : startIndex + 1} to ${Math.min(startIndex + paymentManagementState.pageSize, payments.length)} of ${payments.length} payments</span>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button onclick="changePaymentPage(${paymentManagementState.page - 1})" ${paymentManagementState.page <= 1 ? "disabled" : ""} style="padding:8px 12px;border-radius:8px;border:1px solid #d1d5db;">Prev</button>
+        <strong>Page ${paymentManagementState.page} / ${totalPages}</strong>
+        <button onclick="changePaymentPage(${paymentManagementState.page + 1})" ${paymentManagementState.page >= totalPages ? "disabled" : ""} style="padding:8px 12px;border-radius:8px;border:1px solid #d1d5db;">Next</button>
+      </div>
+    </div>
+  `;
+};
+
+window.sortPayments = (key) => {
+  if (paymentManagementState.sortKey === key) {
+    paymentManagementState.sortDirection =
+      paymentManagementState.sortDirection === "asc" ? "desc" : "asc";
+  } else {
+    paymentManagementState.sortKey = key;
+    paymentManagementState.sortDirection = key === "createdAt" ? "desc" : "asc";
+  }
+
+  paymentManagementState.page = 1;
+  renderPaymentRows();
+};
+
+window.changePaymentPage = (page) => {
+  const totalPages = Math.max(
+    1,
+    Math.ceil(getFilteredPayments().length / paymentManagementState.pageSize)
+  );
+  paymentManagementState.page = Math.min(Math.max(1, Number(page)), totalPages);
+  renderPaymentRows();
+};
+
+window.changePaymentPageSize = (pageSize) => {
+  paymentManagementState.pageSize = Number(pageSize) || 10;
+  paymentManagementState.page = 1;
+  renderPaymentRows();
+};
+
+window.setPaymentSearch = (value) => {
+  paymentManagementState.search = value;
+  paymentManagementState.page = 1;
+  renderPaymentRows();
+};
+
+window.showPaymentDetails = async (paymentOrderId) => {
+  const panel = getElement("selectedPaymentPanel");
+  const output = getElement("selectedPaymentOutput");
+
+  if (panel) panel.style.display = "block";
+  if (output) output.innerHTML = "Loading payment details...";
+
+  try {
+    const data = await requestAdminApi(`/admin/payments/${paymentOrderId}`);
+    const payment = data.payment || {};
+    const refunds = data.refunds || [];
+    const walletTransactions = data.walletTransactions || [];
+    const invoice = payment.invoice || null;
+
+    const refundRows = refunds.length
+      ? refunds
+          .map(
+            (refund) => `
+              <tr>
+                <td style="padding:10px;border:1px solid #e5e7eb;">${escapeHtml(shortText(refund.providerRefundId, 28))}</td>
+                <td style="padding:10px;border:1px solid #e5e7eb;">${paymentStatusBadge(refund.status)}</td>
+                <td style="padding:10px;border:1px solid #e5e7eb;">${escapeHtml(formatMoney(refund.amount, refund.currency))}</td>
+                <td style="padding:10px;border:1px solid #e5e7eb;">${escapeHtml(refund.reversedStars)} Stars</td>
+                <td style="padding:10px;border:1px solid #e5e7eb;">${paymentStatusBadge(refund.financialStatus)}<br><span style="font-size:12px;color:#64748b;">${escapeHtml(refund.financialError || "")}</span></td>
+                <td style="padding:10px;border:1px solid #e5e7eb;">${escapeHtml(formatDateTime(refund.processedAt))}</td>
+              </tr>
+            `
+          )
+          .join("")
+      : `<tr><td colspan="6" style="padding:12px;border:1px solid #e5e7eb;color:#64748b;">No refunds recorded.</td></tr>`;
+
+    const walletRows = walletTransactions.length
+      ? walletTransactions
+          .map(
+            (transaction) => `
+              <tr>
+                <td style="padding:10px;border:1px solid #e5e7eb;">${escapeHtml(transaction.transactionType)}</td>
+                <td style="padding:10px;border:1px solid #e5e7eb;">${escapeHtml(transaction.status)}</td>
+                <td style="padding:10px;border:1px solid #e5e7eb;">${escapeHtml(transaction.amount)} ${escapeHtml(transaction.currency)}</td>
+                <td style="padding:10px;border:1px solid #e5e7eb;" title="${escapeHtml(transaction.paymentRefundId || "")}">${escapeHtml(shortText(transaction.paymentRefundId || "-", 28))}</td>
+                <td style="padding:10px;border:1px solid #e5e7eb;">${escapeHtml(formatDateTime(transaction.completedAt || transaction.createdAt))}</td>
+              </tr>
+            `
+          )
+          .join("")
+      : `<tr><td colspan="5" style="padding:12px;border:1px solid #e5e7eb;color:#64748b;">No wallet transactions linked.</td></tr>`;
+
+    output.innerHTML = `
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:start;">
+        <div>
+          <strong>${escapeHtml(payment.userEmail || "-")}</strong><br>
+          <span style="color:#64748b;font-size:12px;">${escapeHtml(payment.id || paymentOrderId)}</span>
+        </div>
+        <button onclick="closeSelectedPaymentPanel()" style="padding:8px 12px;border-radius:9px;border:1px solid #64748b;background:#fff;color:#334155;font-weight:800;cursor:pointer;">Close</button>
+      </div>
+
+      <div style="margin-top:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;">
+        <div><strong>Status</strong><br>${paymentStatusBadge(payment.status)}</div>
+        <div><strong>Amount</strong><br>${escapeHtml(formatMoney(payment.amount, payment.currency))}</div>
+        <div><strong>Refunded</strong><br>${escapeHtml(formatMoney(payment.refundedAmount, payment.currency))}</div>
+        <div><strong>Stars</strong><br>${escapeHtml(payment.totalStars)} total / ${escapeHtml(payment.walletCreditedStars ?? "-")} credited</div>
+        <div><strong>Razorpay Order</strong><br><span title="${escapeHtml(payment.providerOrderId || "")}">${escapeHtml(shortText(payment.providerOrderId || "-", 34))}</span></div>
+        <div><strong>Razorpay Payment</strong><br><span title="${escapeHtml(payment.providerPaymentId || "")}">${escapeHtml(shortText(payment.providerPaymentId || "-", 34))}</span></div>
+      </div>
+
+      <h4 style="margin-top:20px;">Invoice</h4>
+      ${invoice
+        ? `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;border:1px solid #dbe3ef;border-radius:12px;padding:14px;background:#f8fafc;">
+            <div><strong>Invoice No</strong><br>${escapeHtml(invoice.invoiceNumber)}</div>
+            <div><strong>Taxable</strong><br>${escapeHtml(formatMoney(invoice.taxableAmount, payment.currency))}</div>
+            <div><strong>GST</strong><br>${escapeHtml(formatMoney(invoice.totalTaxAmount, payment.currency))} / ${escapeHtml(String(invoice.taxMode || "").toUpperCase())}</div>
+            <div><strong>SAC</strong><br>${escapeHtml(invoice.sacCode || "-")}</div>
+            <div><strong>Email</strong><br>${escapeHtml(invoice.emailStatus || "-")}</div>
+            <div><strong>PDF</strong><br>${escapeHtml(invoice.pdfStatus || "-")}</div>
+            <div style="display:flex;align-items:end;">
+              <button onclick="downloadPaymentInvoice('${escapeHtml(payment.id)}')" style="padding:9px 13px;border-radius:10px;border:1px solid #6d28d9;background:#6d28d9;color:white;font-weight:800;cursor:pointer;">
+                Download invoice PDF
+              </button>
+            </div>
+          </div>`
+        : `<p style="color:#64748b;">No invoice generated for this payment yet.</p>`
+      }
+
+      <h4 style="margin-top:20px;">Refunds</h4>
+      <div style="overflow:auto;border:1px solid #dbe3ef;border-radius:12px;">
+        <table style="width:100%;border-collapse:collapse;min-width:850px;">
+          <thead><tr style="background:#f8fafc;">
+            <th style="text-align:left;padding:10px;border:1px solid #e5e7eb;">Refund ID</th>
+            <th style="text-align:left;padding:10px;border:1px solid #e5e7eb;">Gateway</th>
+            <th style="text-align:left;padding:10px;border:1px solid #e5e7eb;">Amount</th>
+            <th style="text-align:left;padding:10px;border:1px solid #e5e7eb;">Stars</th>
+            <th style="text-align:left;padding:10px;border:1px solid #e5e7eb;">Financial</th>
+            <th style="text-align:left;padding:10px;border:1px solid #e5e7eb;">Processed</th>
+          </tr></thead>
+          <tbody>${refundRows}</tbody>
+        </table>
+      </div>
+
+      <h4 style="margin-top:20px;">Wallet Transactions</h4>
+      <div style="overflow:auto;border:1px solid #dbe3ef;border-radius:12px;">
+        <table style="width:100%;border-collapse:collapse;min-width:760px;">
+          <thead><tr style="background:#f8fafc;">
+            <th style="text-align:left;padding:10px;border:1px solid #e5e7eb;">Type</th>
+            <th style="text-align:left;padding:10px;border:1px solid #e5e7eb;">Status</th>
+            <th style="text-align:left;padding:10px;border:1px solid #e5e7eb;">Amount</th>
+            <th style="text-align:left;padding:10px;border:1px solid #e5e7eb;">Refund Link</th>
+            <th style="text-align:left;padding:10px;border:1px solid #e5e7eb;">Completed</th>
+          </tr></thead>
+          <tbody>${walletRows}</tbody>
+        </table>
+      </div>
+    `;
+  } catch (error) {
+    if (output) {
+      const message = error instanceof Error ? error.message : String(error);
+      output.innerHTML = `
+        <div style="padding:14px;border:1px solid #fecaca;border-radius:12px;background:#fef2f2;color:#991b1b;">
+          <strong>Unable to load payment details.</strong><br>
+          ${escapeHtml(message)}
+          <div style="margin-top:8px;color:#7f1d1d;font-size:13px;">
+            If the list loads but details return 404, restart/rebuild the local API so the new <code>/admin/payments/:id</code> endpoint is running.
+          </div>
+        </div>
+      `;
+    }
+  }
+};
+
+window.downloadPaymentInvoice = async (paymentOrderId) => {
+  try {
+    const data = await requestAdminApi(
+      `/admin/payments/${paymentOrderId}/invoice/download`
+    );
+
+    if (!data?.downloadUrl) {
+      throw new Error("Invoice download URL missing");
+    }
+
+    window.open(data.downloadUrl, "_blank", "noopener,noreferrer");
+  } catch (error) {
+    alert(error instanceof Error ? error.message : String(error));
+  }
+};
+
+window.closeSelectedPaymentPanel = () => {
+  const panel = getElement("selectedPaymentPanel");
+  const output = getElement("selectedPaymentOutput");
 
   if (panel) panel.style.display = "none";
   if (output) output.innerHTML = "";
@@ -2397,6 +2828,7 @@ const bindEvents = () => {
     "loadUsersBtn",
     "loadDashboardBtn",
     "loadReportsBtn",
+    "loadPaymentsBtn",
     "createCouponBtn",
     "loadCouponsBtn",
     "loadQueuesBtn",
@@ -2419,6 +2851,7 @@ const bindEvents = () => {
   getElement("loadCommentsBtn")?.addEventListener("click", loadComments);
   getElement("loadUsersBtn")?.addEventListener("click", loadUsers);
   getElement("loadReportsBtn")?.addEventListener("click", loadReports);
+  getElement("loadPaymentsBtn")?.addEventListener("click", loadPayments);
   getElement("loadDashboardBtn")?.addEventListener("click", loadDashboardMetrics);
 
   getElement("createCouponBtn")?.addEventListener("click", createCoupon);
