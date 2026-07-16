@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>Advertise on iAdMe | Premium Local Video Ads</title>
+  <meta
+    name="description"
+    content="Create premium short video ad campaigns on iAdMe for local discovery, feed placements, in-stream reach, admin review, and transparent campaign analytics."
+  />
+
+  <link rel="icon" href="/favicon.ico" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="advertiser-page">
+  <header class="site-header advertiser-header">
+    <div class="container header-container">
+      <a class="brand" href="index.html">
+        <img src="assets/iadme-logo.png" alt="iAdMe Logo" class="brand-logo" />
+        <div>
+          <h1>iAdMe Ads</h1>
+          <p>Premium local video campaigns</p>
+        </div>
+      </a>
+
+      <nav class="nav">
+        <a href="#packages">Packages</a>
+        <a href="#dashboard">Dashboard</a>
+        <a href="contact-us.html">Support</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="ads-hero">
+      <div class="container ads-hero-grid">
+        <div class="ads-hero-copy">
+          <p class="eyebrow">Local video advertising</p>
+          <h2>Put your business inside the local feed.</h2>
+          <p>
+            Create short video campaigns for city and locality discovery on
+            iAdMe. Every campaign is reviewed before it goes live, so your brand
+            appears in a cleaner, more trusted environment.
+          </p>
+          <div class="ads-hero-actions">
+            <a class="button" href="#dashboard">Start a Campaign</a>
+            <a class="button ads-secondary-button" href="#packages">View Packages</a>
+          </div>
+        </div>
+
+        <div class="ads-hero-panel" aria-label="Campaign preview">
+          <div class="ads-phone-preview">
+            <div class="ads-phone-top">
+              <span>Sponsored</span>
+              <span>iAdMe</span>
+            </div>
+            <div class="ads-video-stage">
+              <span class="ads-badge">Feed placement</span>
+              <strong>Grand opening weekend</strong>
+              <p>Reach people nearby with a vertical video and a clear call to action.</p>
+            </div>
+            <div class="ads-metrics-strip">
+              <span><strong>12.4K</strong> views</span>
+              <span><strong>4.8%</strong> CTR</span>
+              <span><strong>7 days</strong></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="ads-trust-band">
+      <div class="container ads-trust-grid">
+        <div>
+          <strong>Human reviewed</strong>
+          <span>Ads do not go live automatically.</span>
+        </div>
+        <div>
+          <strong>Local targeting</strong>
+          <span>Country, state and city level targeting.</span>
+        </div>
+        <div>
+          <strong>Video first</strong>
+          <span>Upload short vertical creatives directly.</span>
+        </div>
+        <div>
+          <strong>Transparent stats</strong>
+          <span>Track impressions, clicks and CTR.</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="packages" class="ads-section">
+      <div class="container">
+        <div class="ads-section-heading">
+          <p class="eyebrow">Simple launch pricing</p>
+          <h3>Choose a package, then submit for review.</h3>
+          <p>
+            These packages keep early operations simple while you validate demand.
+            Payment wiring is prepared in the portal and can be connected to
+            Razorpay checkout when you are ready.
+          </p>
+        </div>
+        <div id="adPackages" class="ads-package-grid"></div>
+      </div>
+    </section>
+
+    <section id="dashboard" class="ads-section ads-dashboard-section">
+      <div class="container ads-dashboard-shell">
+        <aside class="ads-auth-panel">
+          <p class="eyebrow">Advertiser access</p>
+          <h3>Sign in or create an account</h3>
+          <p>
+            Use one iAdMe account for campaign setup, video upload, package
+            request and performance reporting.
+          </p>
+
+          <div class="ads-env-row">
+            <label>
+              Environment
+              <select id="adsEnv">
+                <option value="production">Production</option>
+                <option value="staging">Staging</option>
+                <option value="local">Local</option>
+              </select>
+            </label>
+            <label>
+              API Base URL
+              <input id="adsBaseUrl" type="text" value="https://api.iadme.app" />
+            </label>
+          </div>
+
+          <div class="ads-tabs" role="tablist" aria-label="Advertiser auth">
+            <button id="showLoginTab" type="button" class="active">Login</button>
+            <button id="showRegisterTab" type="button">Register</button>
+          </div>
+
+          <form id="adsLoginForm" class="ads-form">
+            <label>Email <input id="adsLoginEmail" type="email" autocomplete="username" required /></label>
+            <label>Password <input id="adsLoginPassword" type="password" autocomplete="current-password" required /></label>
+            <button class="button" type="submit">Login</button>
+          </form>
+
+          <form id="adsRegisterForm" class="ads-form hidden">
+            <label>Business name <input id="adsBusinessName" type="text" maxlength="60" required /></label>
+            <label>Email <input id="adsRegisterEmail" type="email" autocomplete="username" required /></label>
+            <label>Phone <input id="adsRegisterPhone" type="tel" autocomplete="tel" /></label>
+            <label>Password <input id="adsRegisterPassword" type="password" autocomplete="new-password" required /></label>
+            <label class="ads-checkbox">
+              <input id="adsAcceptTerms" type="checkbox" required />
+              <span>I accept the Terms and Privacy Policy.</span>
+            </label>
+            <button class="button" type="submit">Create Account</button>
+          </form>
+
+          <div class="ads-session-row">
+            <span id="adsSessionStatus">Not logged in.</span>
+            <button id="adsLogoutBtn" type="button" class="ads-link-button hidden">Logout</button>
+          </div>
+        </aside>
+
+        <section class="ads-workspace">
+          <div class="ads-workspace-header">
+            <div>
+              <p class="eyebrow">Campaign desk</p>
+              <h3>Create, upload, submit, review.</h3>
+            </div>
+            <button id="refreshCampaignsBtn" type="button" class="button ads-secondary-button">Refresh</button>
+          </div>
+
+          <div class="ads-step-grid">
+            <form id="campaignForm" class="ads-panel ads-form">
+              <span class="ads-step-number">1</span>
+              <h4>Create campaign</h4>
+              <label>Campaign name <input id="campaignName" type="text" placeholder="July city launch" required /></label>
+              <label>Package <select id="campaignPackage"></select></label>
+              <div class="ads-two-col">
+                <label>Country <input id="targetCountry" type="text" value="IN" /></label>
+                <label>State <input id="targetRegion" type="text" placeholder="TS" /></label>
+              </div>
+              <label>City <input id="targetCity" type="text" placeholder="Hyderabad" /></label>
+              <button class="button" type="submit">Create Draft</button>
+            </form>
+
+            <form id="creativeForm" class="ads-panel ads-form">
+              <span class="ads-step-number">2</span>
+              <h4>Upload ad video</h4>
+              <label>Campaign <select id="creativeCampaign" required></select></label>
+              <label>Ad title <input id="creativeTitle" type="text" placeholder="Grand opening offer" required /></label>
+              <label>Description <textarea id="creativeDescription" rows="3" placeholder="Short offer text"></textarea></label>
+              <label>CTA text <input id="creativeCtaText" type="text" maxlength="80" placeholder="Book now" /></label>
+              <label>CTA URL <input id="creativeCtaUrl" type="url" placeholder="https://example.com" /></label>
+              <label>Video file <input id="creativeVideoFile" type="file" accept="video/mp4,video/quicktime,video/*" required /></label>
+              <button class="button" type="submit">Upload for Review</button>
+              <p id="uploadProgress" class="ads-muted"></p>
+            </form>
+
+            <form id="paymentForm" class="ads-panel ads-form">
+              <span class="ads-step-number">3</span>
+              <h4>Request package checkout</h4>
+              <label>Campaign <select id="paymentCampaign" required></select></label>
+              <label>Package <select id="paymentPackage" required></select></label>
+              <button class="button" type="submit">Prepare Payment</button>
+              <p class="ads-muted">
+                Campaign remains pending until payment and admin approval are complete.
+              </p>
+            </form>
+          </div>
+
+          <div class="ads-panel">
+            <div class="ads-table-header">
+              <div>
+                <h4>Your campaigns</h4>
+                <p>Drafts, review status, creatives and live analytics.</p>
+              </div>
+            </div>
+            <div id="campaignsOutput" class="ads-campaign-list"></div>
+          </div>
+
+          <div class="ads-panel">
+            <h4>Activity</h4>
+            <pre id="adsOutput" class="ads-output">Ready.</pre>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      © 2026 FORESTPOND TECHNOLOGIES LLP. All rights reserved.
+    </div>
+  </footer>
+
+  <script src="advertiser.js"></script>
+</body>
+</html>

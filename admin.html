@@ -232,6 +232,103 @@
 
 
 <div class="page-card" style="margin-top:24px;">
+  <h3>Ads Console</h3>
+
+  <p>
+    Create campaigns, attach HLS ad creatives, approve review items and control live ad status without REST commands.
+  </p>
+
+  <div style="margin-top:20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;align-items:end;">
+    <label style="display:grid;gap:6px;font-weight:700;">
+      Campaign Name
+      <input id="adCampaignName" type="text" placeholder="Local launch campaign" style="padding:12px;border:1px solid #d1d5db;border-radius:8px;" />
+    </label>
+
+    <label style="display:grid;gap:6px;font-weight:700;">
+      Advertiser User ID
+      <input id="adAdvertiserUserId" type="text" placeholder="Optional user id" style="padding:12px;border:1px solid #d1d5db;border-radius:8px;" />
+    </label>
+
+    <label style="display:grid;gap:6px;font-weight:700;">
+      Budget Paise
+      <input id="adTotalBudgetCents" type="number" min="1" placeholder="99900" style="padding:12px;border:1px solid #d1d5db;border-radius:8px;" />
+    </label>
+
+    <label style="display:grid;gap:6px;font-weight:700;">
+      Currency
+      <input id="adCurrency" type="text" value="INR" style="padding:12px;border:1px solid #d1d5db;border-radius:8px;" />
+    </label>
+
+    <label style="display:grid;gap:6px;font-weight:700;">
+      Country
+      <input id="adTargetCountry" type="text" value="IN" style="padding:12px;border:1px solid #d1d5db;border-radius:8px;" />
+    </label>
+
+    <label style="display:grid;gap:6px;font-weight:700;">
+      State
+      <input id="adTargetRegion" type="text" placeholder="TS" style="padding:12px;border:1px solid #d1d5db;border-radius:8px;" />
+    </label>
+
+    <label style="display:grid;gap:6px;font-weight:700;">
+      City
+      <input id="adTargetCity" type="text" placeholder="Hyderabad" style="padding:12px;border:1px solid #d1d5db;border-radius:8px;" />
+    </label>
+  </div>
+
+  <div style="margin-top:16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;">
+    <button class="button" id="createAdCampaignBtn" type="button">
+      Create Ad Campaign
+    </button>
+    <button class="button secondary" id="loadAdCampaignsBtn" type="button">
+      Load Ad Campaigns
+    </button>
+  </div>
+
+  <div style="margin-top:24px;padding:18px;border:1px solid #e5e7eb;border-radius:14px;background:#f8fafc;">
+    <h4 style="font-size:20px;margin-bottom:12px;">Attach Creative</h4>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;align-items:end;">
+      <label style="display:grid;gap:6px;font-weight:700;">
+        Campaign
+        <select id="adCreativeCampaignId" style="padding:12px;border:1px solid #d1d5db;border-radius:8px;"></select>
+      </label>
+
+      <label style="display:grid;gap:6px;font-weight:700;">
+        Title
+        <input id="adCreativeTitle" type="text" placeholder="Weekend offer" style="padding:12px;border:1px solid #d1d5db;border-radius:8px;" />
+      </label>
+
+      <label style="display:grid;gap:6px;font-weight:700;">
+        CTA Text
+        <input id="adCreativeCtaText" type="text" placeholder="Book now" style="padding:12px;border:1px solid #d1d5db;border-radius:8px;" />
+      </label>
+
+      <label style="display:grid;gap:6px;font-weight:700;">
+        CTA URL
+        <input id="adCreativeCtaUrl" type="url" placeholder="https://example.com" style="padding:12px;border:1px solid #d1d5db;border-radius:8px;" />
+      </label>
+    </div>
+
+    <label style="display:grid;gap:6px;font-weight:700;margin-top:12px;">
+      HLS URL
+      <input id="adCreativeHlsUrl" type="url" placeholder="https://cdn.example/videos/.../hls/master.m3u8" style="padding:12px;border:1px solid #d1d5db;border-radius:8px;" />
+    </label>
+
+    <label style="display:grid;gap:6px;font-weight:700;margin-top:12px;">
+      Description
+      <textarea id="adCreativeDescription" rows="3" placeholder="Short ad copy" style="padding:12px;border:1px solid #d1d5db;border-radius:8px;"></textarea>
+    </label>
+
+    <button class="button" id="createAdCreativeBtn" type="button" style="margin-top:14px;">
+      Create Creative
+    </button>
+  </div>
+
+  <div id="adsAdminOutput" style="margin-top:20px;overflow:auto;"></div>
+</div>
+
+
+<div class="page-card" style="margin-top:24px;">
   <h3>Payment Operations</h3>
 
   <p>

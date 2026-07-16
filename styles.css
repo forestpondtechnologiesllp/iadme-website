@@ -703,3 +703,503 @@ footer {
     font-size: 24px;
   }
 }
+
+.hidden {
+  display: none !important;
+}
+
+.advertiser-page {
+  background: #f5f2ec;
+  color: #121212;
+}
+
+.advertiser-header {
+  background: rgba(250, 248, 244, 0.94);
+  border-bottom-color: rgba(18, 18, 18, 0.08);
+}
+
+.ads-hero {
+  min-height: 670px;
+  display: flex;
+  align-items: center;
+  background: linear-gradient(135deg, #071821, #15211f 58%, #3f2f1e);
+  color: #fffaf2;
+  overflow: hidden;
+}
+
+.ads-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.75fr);
+  gap: 56px;
+  align-items: center;
+}
+
+.ads-hero-copy h2 {
+  max-width: 720px;
+  font-size: clamp(48px, 7vw, 82px);
+  line-height: 0.98;
+  letter-spacing: 0;
+  margin-bottom: 24px;
+}
+
+.ads-hero-copy p:not(.eyebrow) {
+  max-width: 640px;
+  color: rgba(255, 250, 242, 0.78);
+  font-size: 19px;
+}
+
+.ads-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 32px;
+}
+
+.ads-secondary-button {
+  background: rgba(255, 255, 255, 0.12);
+  color: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: none;
+}
+
+.ads-hero-panel {
+  display: flex;
+  justify-content: center;
+}
+
+.ads-phone-preview {
+  width: min(100%, 390px);
+  min-height: 560px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 30px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(18px);
+}
+
+.ads-phone-top,
+.ads-metrics-strip {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+  color: rgba(255, 250, 242, 0.8);
+}
+
+.ads-video-stage {
+  min-height: 405px;
+  margin: 18px 0;
+  border-radius: 24px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  background:
+    linear-gradient(180deg, rgba(8, 13, 18, 0.08), rgba(8, 13, 18, 0.88)),
+    linear-gradient(135deg, #0f766e, #be8b3b 55%, #3f2f1e);
+}
+
+.ads-video-stage strong {
+  font-size: 30px;
+  line-height: 1.08;
+  margin: 18px 0 10px;
+}
+
+.ads-video-stage p {
+  color: rgba(255, 250, 242, 0.76);
+}
+
+.ads-badge {
+  align-self: flex-start;
+  padding: 8px 11px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fffaf2;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.ads-metrics-strip span {
+  display: grid;
+  gap: 2px;
+}
+
+.ads-metrics-strip strong {
+  color: #fffaf2;
+  font-size: 20px;
+}
+
+.ads-trust-band {
+  background: #fffaf2;
+  border-bottom: 1px solid rgba(18, 18, 18, 0.08);
+}
+
+.ads-trust-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  padding: 26px 0;
+}
+
+.ads-trust-grid div {
+  display: grid;
+  gap: 4px;
+}
+
+.ads-trust-grid strong {
+  font-size: 16px;
+}
+
+.ads-trust-grid span,
+.ads-muted {
+  color: #647067;
+  font-size: 14px;
+}
+
+.ads-section {
+  padding: 72px 0;
+}
+
+.ads-section-heading {
+  max-width: 700px;
+  margin-bottom: 28px;
+}
+
+.ads-section-heading h3,
+.ads-dashboard-shell h3 {
+  font-size: clamp(30px, 4vw, 48px);
+  line-height: 1.05;
+  margin-bottom: 12px;
+}
+
+.ads-section-heading p {
+  color: #647067;
+  font-size: 17px;
+}
+
+.ads-package-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+
+.ads-package-card,
+.ads-panel,
+.ads-auth-panel {
+  background: rgba(255, 250, 242, 0.92);
+  border: 1px solid rgba(18, 18, 18, 0.08);
+  border-radius: 8px;
+  box-shadow: 0 16px 44px rgba(31, 41, 35, 0.1);
+}
+
+.ads-package-card {
+  padding: 26px;
+  display: grid;
+  gap: 15px;
+}
+
+.ads-package-card > span,
+.ads-status {
+  width: fit-content;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #e7efe9;
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.ads-package-card h4 {
+  font-size: 24px;
+}
+
+.ads-package-card strong {
+  font-size: 34px;
+  line-height: 1;
+}
+
+.ads-package-card p,
+.ads-package-card dd,
+.ads-package-card dt {
+  color: #647067;
+}
+
+.ads-package-card dl {
+  display: grid;
+  gap: 10px;
+}
+
+.ads-dashboard-section {
+  background: linear-gradient(180deg, #f5f2ec, #ebe4d8);
+}
+
+.ads-dashboard-shell {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.ads-auth-panel,
+.ads-panel {
+  padding: 24px;
+}
+
+.ads-auth-panel {
+  position: sticky;
+  top: 104px;
+}
+
+.ads-env-row,
+.ads-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.ads-form {
+  display: grid;
+  gap: 14px;
+}
+
+.ads-form label {
+  display: grid;
+  gap: 7px;
+  font-weight: 800;
+  color: #1c211d;
+}
+
+.ads-form input,
+.ads-form select,
+.ads-form textarea {
+  width: 100%;
+  padding: 12px 13px;
+  border: 1px solid rgba(18, 18, 18, 0.13);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #121212;
+  font: inherit;
+}
+
+.ads-form textarea {
+  resize: vertical;
+}
+
+.ads-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 20px 0 14px;
+}
+
+.ads-tabs button,
+.ads-link-button {
+  border: 0;
+  border-radius: 8px;
+  padding: 11px 12px;
+  background: rgba(18, 18, 18, 0.06);
+  color: #121212;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.ads-tabs button.active {
+  background: #121212;
+  color: #fffaf2;
+}
+
+.ads-checkbox {
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  font-weight: 600 !important;
+}
+
+.ads-checkbox input {
+  width: auto;
+  margin-top: 4px;
+}
+
+.ads-session-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(18, 18, 18, 0.08);
+  font-size: 14px;
+}
+
+.ads-workspace {
+  display: grid;
+  gap: 18px;
+}
+
+.ads-workspace-header,
+.ads-table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.ads-step-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.ads-step-number {
+  width: 34px;
+  height: 34px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #121212;
+  color: #fffaf2;
+  font-weight: 900;
+}
+
+.ads-panel h4 {
+  font-size: 21px;
+}
+
+.ads-campaign-list {
+  display: grid;
+  gap: 14px;
+}
+
+.ads-campaign-card {
+  display: grid;
+  grid-template-columns: minmax(210px, 1fr) minmax(240px, 0.8fr);
+  gap: 18px;
+  padding: 18px;
+  border: 1px solid rgba(18, 18, 18, 0.08);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.ads-campaign-main h5 {
+  font-size: 20px;
+  margin: 10px 0 4px;
+}
+
+.ads-campaign-main p,
+.ads-campaign-main small,
+.ads-creative-list small,
+.ads-empty-state span {
+  color: #647067;
+}
+
+.ads-campaign-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.ads-campaign-metrics div {
+  padding: 14px;
+  border-radius: 8px;
+  background: #f5f2ec;
+}
+
+.ads-campaign-metrics strong {
+  display: block;
+  font-size: 24px;
+}
+
+.ads-campaign-metrics span {
+  color: #647067;
+  font-size: 12px;
+}
+
+.ads-creative-list {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+}
+
+.ads-creative-list div {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #f8f7f3;
+}
+
+.ads-status-active,
+.ads-status-approved {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.ads-status-pending_review,
+.ads-status-draft {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.ads-status-rejected,
+.ads-status-paused {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.ads-output {
+  min-height: 96px;
+  white-space: pre-wrap;
+  overflow: auto;
+  padding: 14px;
+  border-radius: 8px;
+  background: #111827;
+  color: #d1fae5;
+}
+
+.ads-empty-state {
+  display: grid;
+  gap: 4px;
+  padding: 18px;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px dashed rgba(18, 18, 18, 0.18);
+}
+
+@media (max-width: 980px) {
+  .ads-hero-grid,
+  .ads-dashboard-shell,
+  .ads-step-grid,
+  .ads-package-grid,
+  .ads-trust-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ads-auth-panel {
+    position: static;
+  }
+
+  .ads-campaign-card {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .ads-hero {
+    min-height: auto;
+    padding: 64px 0;
+  }
+
+  .ads-hero-actions,
+  .ads-workspace-header,
+  .ads-table-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ads-env-row,
+  .ads-two-col,
+  .ads-campaign-metrics {
+    grid-template-columns: 1fr;
+  }
+}

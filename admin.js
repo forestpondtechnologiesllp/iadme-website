@@ -212,6 +212,11 @@ const paymentManagementState = {
   search: "",
 };
 
+const adsManagementState = {
+  campaigns: [],
+  creativesByCampaignId: {},
+};
+
 const escapeHtml = (value) =>
   String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -2924,6 +2929,206 @@ const loadDashboardMetrics = async () => {
   }
 };
 
+const syncAdCampaignSelect = () => {
+  const select = getElement("adCreativeCampaignId");
+  if (!select) return;
+
+  select.innerHTML = adsManagementState.campaigns
+    .map(
+      (campaign) =>
+        `<option value="${escapeHtml(campaign.id)}">${escapeHtml(campaign.name)} (${escapeHtml(campaign.status)})</option>`
+    )
+    .join("");
+};
+
+const loadAdCreativesForCampaign = async (campaignId) => {
+  const data = await requestAdminApi(`/admin/ads/campaigns/${campaignId}/creatives`);
+  adsManagementState.creativesByCampaignId[campaignId] = data?.items || [];
+};
+
+const renderAdsAdmin = () => {
+  const container = getElement("adsAdminOutput");
+  if (!container) return;
+
+  syncAdCampaignSelect();
+
+  if (adsManagementState.campaigns.length === 0) {
+    container.innerHTML = `
+      <div style="padding:18px;border:1px dashed #cbd5e1;border-radius:12px;background:#fff;">
+        No ad campaigns loaded yet.
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = adsManagementState.campaigns
+    .map((campaign) => {
+      const creatives = adsManagementState.creativesByCampaignId[campaign.id] || [];
+      const creativeRows = creatives.length
+        ? creatives
+            .map(
+              (creative) => `
+                <tr>
+                  <td>${escapeHtml(creative.title)}</td>
+                  <td><code>${escapeHtml(creative.status)}</code></td>
+                  <td>${escapeHtml(creative.cta_text || creative.ctaText || "")}</td>
+                  <td style="min-width:220px;word-break:break-all;">${escapeHtml(creative.hls_url || creative.hlsUrl || "")}</td>
+                  <td>
+                    <button class="button" type="button" style="padding:8px 10px;border-radius:8px;" onclick="setAdCreativeStatus('${escapeHtml(creative.id)}','approved')">Approve</button>
+                    <button class="button" type="button" style="padding:8px 10px;border-radius:8px;background:#64748b;box-shadow:none;" onclick="setAdCreativeStatus('${escapeHtml(creative.id)}','paused')">Pause</button>
+                    <button class="button" type="button" style="padding:8px 10px;border-radius:8px;background:#991b1b;box-shadow:none;" onclick="setAdCreativeStatus('${escapeHtml(creative.id)}','rejected')">Reject</button>
+                  </td>
+                </tr>
+              `
+            )
+            .join("")
+        : `<tr><td colspan="5">No creatives attached.</td></tr>`;
+
+      return `
+        <section style="margin-top:16px;padding:18px;border:1px solid #e5e7eb;border-radius:14px;background:#fff;">
+          <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:start;">
+            <div>
+              <h4 style="font-size:20px;margin-bottom:4px;">${escapeHtml(campaign.name)}</h4>
+              <div style="color:#64748b;font-size:14px;">
+                ${escapeHtml(campaign.id)} · ${escapeHtml(campaign.target_country_key || "all")} /
+                ${escapeHtml(campaign.target_region_key || "all")} /
+                ${escapeHtml(campaign.target_city_key || "all")}
+              </div>
+              <div style="margin-top:8px;"><code>${escapeHtml(campaign.status)}</code></div>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;">
+              <button class="button" type="button" style="padding:9px 12px;border-radius:8px;" onclick="setAdCampaignStatus('${escapeHtml(campaign.id)}','active')">Activate</button>
+              <button class="button" type="button" style="padding:9px 12px;border-radius:8px;background:#64748b;box-shadow:none;" onclick="setAdCampaignStatus('${escapeHtml(campaign.id)}','paused')">Pause</button>
+              <button class="button" type="button" style="padding:9px 12px;border-radius:8px;background:#991b1b;box-shadow:none;" onclick="setAdCampaignStatus('${escapeHtml(campaign.id)}','rejected')">Reject</button>
+            </div>
+          </div>
+
+          <div style="overflow:auto;margin-top:14px;">
+            <table style="width:100%;border-collapse:collapse;">
+              <thead>
+                <tr>
+                  <th style="text-align:left;padding:10px;border-bottom:1px solid #e5e7eb;">Creative</th>
+                  <th style="text-align:left;padding:10px;border-bottom:1px solid #e5e7eb;">Status</th>
+                  <th style="text-align:left;padding:10px;border-bottom:1px solid #e5e7eb;">CTA</th>
+                  <th style="text-align:left;padding:10px;border-bottom:1px solid #e5e7eb;">HLS</th>
+                  <th style="text-align:left;padding:10px;border-bottom:1px solid #e5e7eb;">Actions</th>
+                </tr>
+              </thead>
+              <tbody>${creativeRows}</tbody>
+            </table>
+          </div>
+        </section>
+      `;
+    })
+    .join("");
+};
+
+const loadAdCampaigns = async () => {
+  try {
+    await withLoadingButton("loadAdCampaignsBtn", "Loading Ad Campaigns...", async () => {
+      const data = await requestAdminApi("/admin/ads/campaigns");
+      adsManagementState.campaigns = data?.items || [];
+      adsManagementState.creativesByCampaignId = {};
+
+      for (const campaign of adsManagementState.campaigns) {
+        await loadAdCreativesForCampaign(campaign.id);
+      }
+
+      renderAdsAdmin();
+    });
+  } catch (error) {
+    writeOutput("adsAdminOutput", error.message);
+  }
+};
+
+const createAdCampaign = async () => {
+  const name = getElement("adCampaignName")?.value?.trim();
+
+  if (!name) {
+    alert("Campaign name is required");
+    return;
+  }
+
+  const totalBudget = Number(getElement("adTotalBudgetCents")?.value || 0);
+
+  const payload = {
+    name,
+    advertiserUserId: getElement("adAdvertiserUserId")?.value?.trim() || null,
+    totalBudgetCents: totalBudget > 0 ? totalBudget : null,
+    currency: getElement("adCurrency")?.value?.trim() || "INR",
+    targetCountryKey: getElement("adTargetCountry")?.value?.trim() || null,
+    targetRegionKey: getElement("adTargetRegion")?.value?.trim() || null,
+    targetCityKey: getElement("adTargetCity")?.value?.trim() || null,
+  };
+
+  try {
+    await requestAdminApi("/admin/ads/campaigns", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    await loadAdCampaigns();
+  } catch (error) {
+    alert(error.message);
+  }
+};
+
+const createAdCreative = async () => {
+  const campaignId = getElement("adCreativeCampaignId")?.value;
+  const title = getElement("adCreativeTitle")?.value?.trim();
+  const hlsUrl = getElement("adCreativeHlsUrl")?.value?.trim();
+
+  if (!campaignId || !title || !hlsUrl) {
+    alert("Campaign, title and HLS URL are required");
+    return;
+  }
+
+  const payload = {
+    campaignId,
+    title,
+    hlsUrl,
+    description: getElement("adCreativeDescription")?.value?.trim() || null,
+    ctaText: getElement("adCreativeCtaText")?.value?.trim() || null,
+    ctaUrl: getElement("adCreativeCtaUrl")?.value?.trim() || null,
+  };
+
+  try {
+    await requestAdminApi("/admin/ads/creatives", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    await loadAdCampaigns();
+  } catch (error) {
+    alert(error.message);
+  }
+};
+
+const setAdCampaignStatus = async (campaignId, status) => {
+  try {
+    await requestAdminApi(`/admin/ads/campaigns/${campaignId}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    });
+    await loadAdCampaigns();
+  } catch (error) {
+    alert(error.message);
+  }
+};
+
+const setAdCreativeStatus = async (creativeId, status) => {
+  try {
+    await requestAdminApi(`/admin/ads/creatives/${creativeId}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    });
+    await loadAdCampaigns();
+  } catch (error) {
+    alert(error.message);
+  }
+};
+
+window.setAdCampaignStatus = setAdCampaignStatus;
+window.setAdCreativeStatus = setAdCreativeStatus;
+
 const applyEnvironmentSelection = () => {
   const envSelect = getElement("adminEnv");
   const baseUrlInput = getElement("baseUrl");
@@ -3013,6 +3218,9 @@ const bindEvents = () => {
     "loadCouponsBtn",
     "loadQueuesBtn",
     "loadWorkersBtn",
+    "loadAdCampaignsBtn",
+    "createAdCampaignBtn",
+    "createAdCreativeBtn",
   ].forEach((id) => {
     const btn = getElement(id);
     if (btn) {
@@ -3041,6 +3249,9 @@ const bindEvents = () => {
 
   getElement("loadQueuesBtn")?.addEventListener("click", loadQueueMetrics);
   getElement("loadWorkersBtn")?.addEventListener("click", loadWorkerMetrics);
+  getElement("loadAdCampaignsBtn")?.addEventListener("click", loadAdCampaigns);
+  getElement("createAdCampaignBtn")?.addEventListener("click", createAdCampaign);
+  getElement("createAdCreativeBtn")?.addEventListener("click", createAdCreative);
 
 };
 
