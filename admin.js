@@ -2879,6 +2879,7 @@ const loadDashboardMetrics = async () => {
     const data = await requestAdminApi("/admin/metrics/platform");
 
     const moderation = data?.moderation ?? {};
+    const targets = data?.targets ?? {};
 
     const openReports =
       moderation.openVideoReports ??
@@ -2908,6 +2909,26 @@ const loadDashboardMetrics = async () => {
     setValue("deletedVideosCount", deletedVideos);
     setValue("deletedCommentsCount", deletedComments);
     setValue("deactivatedUsersCount", deactivatedUsers);
+    setValue("activeTargetsCount", targets.activeTargets ?? 0);
+    setValue("uniqueTargetersCount", targets.uniqueTargeters ?? 0);
+    setValue("targetedVideosCount", targets.targetedVideos ?? 0);
+    setValue("achievedTargetsCount", targets.achievedTargets ?? 0);
+    setValue(
+      "targetCompletionRate",
+      targets.completionRate == null ? "-" : `${targets.completionRate}%`
+    );
+    setValue("scheduledTargetsCount", targets.scheduledTargets ?? 0);
+    setValue("overdueTargetsCount", targets.overdueTargets ?? 0);
+    setValue(
+      "targetMilestoneDeliveries",
+      targets.milestoneDeliveries ?? 0
+    );
+
+    const targetEvents = targets.events ?? {};
+    setValue(
+      "targetLifecycleEvents",
+      `Lifecycle events since metrics reset: ${targetEvents.set ?? 0} set, ${targetEvents.removed ?? 0} removed, ${targetEvents.achieved ?? 0} achieved, ${targetEvents.reopened ?? 0} reopened, ${targetEvents.datesSet ?? 0} dates set, ${targetEvents.datesCleared ?? 0} dates cleared.`
+    );
 
     setTimeout(() => {
       if (button) {
