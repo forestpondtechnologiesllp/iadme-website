@@ -56,6 +56,84 @@ const requestAdminApi = async (path, options = {}) => {
   return body;
 };
 
+window.publishICubeVideo = async () => {
+  const fileInput = getElement("icubeVideoFile");
+  const titleInput = getElement("icubeVideoTitle");
+  const button = getElement("publishICubeVideoBtn");
+  const status = getElement("icubePublishStatus");
+  const file = fileInput?.files?.[0];
+  const title = titleInput?.value?.trim() || "";
+
+  if (!file) {
+    alert("Choose a video file first.");
+    return;
+  }
+  if (!file.type.startsWith("video/")) {
+    alert("The selected file must be a video.");
+    return;
+  }
+  if (!title) {
+    alert("Enter a title for the i³ video.");
+    return;
+  }
+
+  try {
+    button.disabled = true;
+    status.textContent = "Creating secure upload…";
+    const intent = await requestAdminApi("/admin/icube/uploads/create", {
+      method: "POST",
+      body: JSON.stringify({
+        fileName: file.name,
+        contentType: file.type,
+        sizeBytes: file.size,
+      }),
+    });
+
+    const uploadId = intent?.upload?.id;
+    const uploadUrl = intent?.uploadUrl;
+    if (!uploadId || !uploadUrl) {
+      throw new Error("The API did not return a valid upload destination.");
+    }
+
+    status.textContent = "Uploading source video…";
+    const uploadResponse = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": file.type },
+      body: file,
+    });
+    if (!uploadResponse.ok) {
+      throw new Error(`Source upload failed with ${uploadResponse.status}`);
+    }
+
+    status.textContent = "Publishing and starting video processing…";
+    const video = await requestAdminApi(
+      `/admin/icube/uploads/${encodeURIComponent(uploadId)}/publish`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          title,
+          description: getElement("icubeVideoDescription")?.value?.trim() || undefined,
+          visibility: getElement("icubeVideoVisibility")?.value || "public",
+          countryCode: getElement("icubeVideoCountry")?.value?.trim() || undefined,
+          regionCode: getElement("icubeVideoRegion")?.value?.trim() || undefined,
+          city: getElement("icubeVideoCity")?.value?.trim() || undefined,
+          locality: getElement("icubeVideoLocality")?.value?.trim() || undefined,
+        }),
+      }
+    );
+
+    status.textContent = `Published as i³. Processing video ${video.id}.`;
+    fileInput.value = "";
+    titleInput.value = "";
+    getElement("icubeVideoDescription").value = "";
+    if (typeof loadVideos === "function") await loadVideos();
+  } catch (error) {
+    status.textContent = `Publish failed: ${error.message}`;
+  } finally {
+    button.disabled = false;
+  }
+};
+
 const setLoginStatus = (message, isLoggedIn = false) => {
   const statusEl = getElement("adminLoginStatus");
   const loginBtn = getElement("adminLoginBtn");
@@ -119,7 +197,7 @@ const loginAdmin = async () => {
 
     getElement("adminPassword").value = "";
     setLoginStatus(`Logged in as ${email}`, true);
-    await loadDashboardMetrics();
+    await Promise.all([loadDashboardMetrics(), loadICubeAIOperations()]);
   } catch (error) {
     setLoginStatus("Login failed.", false);
     alert(error.message);
@@ -1876,6 +1954,178 @@ const renderOperationsCards = (title, data) => {
   `;
 };
 
+const renderICubeAIOperations = (data) => {
+  const provider = data?.provider || {};
+  const rollout = data?.rollout || {};
+  const circuit = data?.circuitBreaker || {};
+  const today = data?.usage?.today || {};
+  const footprint = data?.footprint || {};
+  const support = footprint.support || {};
+  const failures = data?.usage?.recentFailures || [];
+  const numberText = (value) => Number(value || 0).toLocaleString("en-IN");
+  const setText = (id, value) => {
+    const element = getElement(id);
+    if (element) element.textContent = String(value);
+  };
+  const setValue = (id, value) => {
+    const element = getElement(id);
+    if (element) element.value = value ?? "";
+  };
+  const setChecked = (id, value) => {
+    const element = getElement(id);
+    if (element) element.checked = Boolean(value);
+  };
+
+  const providerReady = provider.configured === true;
+  const generatedEnabled = rollout.enabled === true;
+  const circuitOpen = circuit.open === true;
+  const overall = getElement("icubeAIOverallStatus");
+  if (overall) {
+    overall.textContent = !providerReady
+      ? "Provider key missing"
+      : !generatedEnabled
+        ? "Guided fallback only"
+        : circuitOpen
+          ? "Circuit open — fallback active"
+          : "Healthy";
+    overall.style.color = providerReady && generatedEnabled && !circuitOpen
+      ? "#166534"
+      : circuitOpen
+        ? "#b91c1c"
+        : "#92400e";
+    overall.style.background = providerReady && generatedEnabled && !circuitOpen
+      ? "#dcfce7"
+      : circuitOpen
+        ? "#fee2e2"
+        : "#fef3c7";
+  }
+
+  setText("icubeAIProviderStatus", providerReady ? "Configured" : "Missing key");
+  setText(
+    "icubeAIRolloutStatus",
+    generatedEnabled ? `${rollout.percent ?? 0}%` : "Disabled"
+  );
+  setText("icubeAITodayGenerated", numberText(today.succeeded));
+  setText(
+    "icubeAISuccessRate",
+    today.successPercent == null ? "-" : `${today.successPercent}%`
+  );
+  setText("icubeAIModerated", numberText(today.moderated));
+  setText("icubeAITokensToday", numberText(today.tokens?.total));
+  setText("icubeAICostToday", `$${Number(today.estimatedCostUsd || 0).toFixed(4)}`);
+  setText(
+    "icubeAIP95Latency",
+    today.latency?.p95Ms == null ? "-" : `${numberText(today.latency.p95Ms)} ms`
+  );
+
+  setChecked("icubeAIEnabled", rollout.enabled);
+  setChecked("icubeAIAccountContextEnabled", rollout.accountContextEnabled);
+  setChecked("icubeAICircuitEnabled", circuit.enabled);
+  setValue("icubeAIRolloutPercent", rollout.percent);
+  setValue("icubeAIModel", rollout.model);
+  setValue("icubeAIDailyLimit", rollout.dailyReplyLimitPerUser);
+  setValue("icubeAITimeoutMs", rollout.requestTimeoutMs);
+  setValue("icubeAIMaxOutputTokens", rollout.maxOutputTokens);
+  setValue("icubeAICircuitWindow", circuit.windowMinutes);
+  setValue("icubeAICircuitMinAttempts", circuit.minimumAttempts);
+  setValue("icubeAICircuitFailurePercent", circuit.failureThresholdPercent);
+  setValue("icubeAIInputCost", data?.pricing?.inputCostPerMillionUsd);
+  setValue("icubeAICachedInputCost", data?.pricing?.cachedInputCostPerMillionUsd);
+  setValue("icubeAIOutputCost", data?.pricing?.outputCostPerMillionUsd);
+
+  const footprintOutput = getElement("icubeAIFootprint");
+  if (footprintOutput) {
+    footprintOutput.innerHTML = `
+      <div style="padding:16px;border:1px solid #e5e7eb;border-radius:12px;background:#fff;">
+        <strong>i³ footprint</strong>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:12px;">
+          <div><b>${numberText(footprint.insightComments)}</b><br><span style="font-size:12px;color:#64748b;">Insight comments</span></div>
+          <div><b>${numberText(footprint.messagesSent)}</b><br><span style="font-size:12px;color:#64748b;">Messages sent</span></div>
+          <div><b>${numberText(footprint.conversations)}</b><br><span style="font-size:12px;color:#64748b;">Conversations</span></div>
+          <div><b>${numberText(footprint.publishedVideos)}</b><br><span style="font-size:12px;color:#64748b;">Official videos</span></div>
+          <div><b>${numberText(footprint.followers)}</b><br><span style="font-size:12px;color:#64748b;">Followers</span></div>
+          <div><b>${numberText(support.escalationsSent)}</b><br><span style="font-size:12px;color:#64748b;">Support emails sent</span></div>
+          <div><b>${numberText(support.awaitingDetails)}</b><br><span style="font-size:12px;color:#64748b;">Awaiting issue details</span></div>
+          <div><b>${numberText(support.escalationsFailed)}</b><br><span style="font-size:12px;color:#64748b;">Support email failures</span></div>
+        </div>
+      </div>
+    `;
+  }
+
+  const failureOutput = getElement("icubeAIRecentFailures");
+  if (failureOutput) {
+    failureOutput.innerHTML = failures.length === 0
+      ? '<p style="color:#64748b;">No recent AI provider failures.</p>'
+      : `
+        <strong>Recent provider failures</strong>
+        <table style="width:100%;border-collapse:collapse;min-width:620px;margin-top:10px;">
+          <thead><tr><th style="text-align:left;padding:9px;border-bottom:1px solid #e5e7eb;">Time</th><th style="text-align:left;padding:9px;border-bottom:1px solid #e5e7eb;">Model</th><th style="text-align:left;padding:9px;border-bottom:1px solid #e5e7eb;">Error</th><th style="text-align:left;padding:9px;border-bottom:1px solid #e5e7eb;">Latency</th></tr></thead>
+          <tbody>${failures.map((failure) => `
+            <tr>
+              <td style="padding:9px;border-bottom:1px solid #f1f5f9;">${escapeHtml(formatDateTime(failure.createdAt))}</td>
+              <td style="padding:9px;border-bottom:1px solid #f1f5f9;">${escapeHtml(failure.model)}</td>
+              <td style="padding:9px;border-bottom:1px solid #f1f5f9;">${escapeHtml(failure.errorCode)}</td>
+              <td style="padding:9px;border-bottom:1px solid #f1f5f9;">${failure.latencyMs == null ? "-" : `${numberText(failure.latencyMs)} ms`}</td>
+            </tr>`).join("")}</tbody>
+        </table>
+      `;
+  }
+};
+
+const loadICubeAIOperations = async () => {
+  try {
+    await withLoadingButton(
+      "loadICubeAIOperationsBtn",
+      "Refreshing i³...",
+      async () => {
+        const data = await requestAdminApi("/admin/icube/ai/overview");
+        renderICubeAIOperations(data);
+      }
+    );
+  } catch (error) {
+    const overall = getElement("icubeAIOverallStatus");
+    if (overall) overall.textContent = `Load failed: ${error.message}`;
+  }
+};
+
+const numericInput = (id) => Number(getElement(id)?.value);
+
+const saveICubeAIRollout = async () => {
+  const status = getElement("icubeAIRolloutSaveStatus");
+  try {
+    await withLoadingButton(
+      "saveICubeAIRolloutBtn",
+      "Saving rollout...",
+      async () => {
+        if (status) status.textContent = "Saving audited settings...";
+        const data = await requestAdminApi("/admin/icube/ai/rollout", {
+          method: "PUT",
+          body: JSON.stringify({
+            enabled: Boolean(getElement("icubeAIEnabled")?.checked),
+            rolloutPercent: numericInput("icubeAIRolloutPercent"),
+            model: getElement("icubeAIModel")?.value?.trim(),
+            dailyReplyLimitPerUser: numericInput("icubeAIDailyLimit"),
+            requestTimeoutMs: numericInput("icubeAITimeoutMs"),
+            maxOutputTokens: numericInput("icubeAIMaxOutputTokens"),
+            accountContextEnabled: Boolean(getElement("icubeAIAccountContextEnabled")?.checked),
+            circuitBreakerEnabled: Boolean(getElement("icubeAICircuitEnabled")?.checked),
+            circuitBreakerWindowMinutes: numericInput("icubeAICircuitWindow"),
+            circuitBreakerMinimumAttempts: numericInput("icubeAICircuitMinAttempts"),
+            circuitBreakerFailurePercent: numericInput("icubeAICircuitFailurePercent"),
+            inputCostPerMillionUsd: numericInput("icubeAIInputCost"),
+            cachedInputCostPerMillionUsd: numericInput("icubeAICachedInputCost"),
+            outputCostPerMillionUsd: numericInput("icubeAIOutputCost"),
+          }),
+        });
+        renderICubeAIOperations(data);
+        if (status) status.textContent = "Saved and recorded in the audit log.";
+      }
+    );
+  } catch (error) {
+    if (status) status.textContent = `Save failed: ${error.message}`;
+  }
+};
+
 const loadQueueMetrics = async () => {
   try {
     await withLoadingButton("loadQueuesBtn", "Loading Queues...", async () => {
@@ -3239,6 +3489,8 @@ const bindEvents = () => {
     "loadCouponsBtn",
     "loadQueuesBtn",
     "loadWorkersBtn",
+    "loadICubeAIOperationsBtn",
+    "saveICubeAIRolloutBtn",
     "loadAdCampaignsBtn",
     "createAdCampaignBtn",
     "createAdCreativeBtn",
@@ -3270,6 +3522,8 @@ const bindEvents = () => {
 
   getElement("loadQueuesBtn")?.addEventListener("click", loadQueueMetrics);
   getElement("loadWorkersBtn")?.addEventListener("click", loadWorkerMetrics);
+  getElement("loadICubeAIOperationsBtn")?.addEventListener("click", loadICubeAIOperations);
+  getElement("saveICubeAIRolloutBtn")?.addEventListener("click", saveICubeAIRollout);
   getElement("loadAdCampaignsBtn")?.addEventListener("click", loadAdCampaigns);
   getElement("createAdCampaignBtn")?.addEventListener("click", createAdCampaign);
   getElement("createAdCreativeBtn")?.addEventListener("click", createAdCreative);
@@ -3284,5 +3538,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (token) {
     loadDashboardMetrics();
+    loadICubeAIOperations();
   }
 });

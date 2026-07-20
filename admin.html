@@ -238,6 +238,46 @@
     Review videos, playback status, visibility, moderation state and perform delete/restore actions.
   </p>
 
+  <div style="margin:18px 0 24px;padding:18px;border:1px solid #c4b5fd;border-radius:14px;background:#faf5ff;">
+    <h4 style="margin:0 0 8px;color:#5b21b6;">Publish as i³</h4>
+    <p style="margin:0 0 16px;color:#64748b;">
+      Upload official company content to the protected i³ profile. Publishing is recorded in the admin audit log.
+    </p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;">
+      <label style="display:grid;gap:6px;font-weight:700;">Video file
+        <input id="icubeVideoFile" type="file" accept="video/*" style="padding:10px;border:1px solid #d1d5db;border-radius:9px;background:#fff;" />
+      </label>
+      <label style="display:grid;gap:6px;font-weight:700;">Title
+        <input id="icubeVideoTitle" maxlength="160" placeholder="Official video title" style="padding:10px;border:1px solid #d1d5db;border-radius:9px;" />
+      </label>
+      <label style="display:grid;gap:6px;font-weight:700;">Visibility
+        <select id="icubeVideoVisibility" style="padding:10px;border:1px solid #d1d5db;border-radius:9px;background:#fff;">
+          <option value="public">Public</option>
+          <option value="private">Private draft</option>
+        </select>
+      </label>
+      <label style="display:grid;gap:6px;font-weight:700;">Country code
+        <input id="icubeVideoCountry" maxlength="8" placeholder="IN" style="padding:10px;border:1px solid #d1d5db;border-radius:9px;" />
+      </label>
+      <label style="display:grid;gap:6px;font-weight:700;">Region
+        <input id="icubeVideoRegion" maxlength="100" placeholder="Telangana" style="padding:10px;border:1px solid #d1d5db;border-radius:9px;" />
+      </label>
+      <label style="display:grid;gap:6px;font-weight:700;">City
+        <input id="icubeVideoCity" maxlength="120" placeholder="Hyderabad" style="padding:10px;border:1px solid #d1d5db;border-radius:9px;" />
+      </label>
+      <label style="display:grid;gap:6px;font-weight:700;">Locality
+        <input id="icubeVideoLocality" maxlength="160" placeholder="Chanda Nagar" style="padding:10px;border:1px solid #d1d5db;border-radius:9px;" />
+      </label>
+    </div>
+    <label style="display:grid;gap:6px;font-weight:700;margin-top:12px;">Description
+      <textarea id="icubeVideoDescription" maxlength="2000" rows="3" placeholder="Describe the official video" style="padding:10px;border:1px solid #d1d5db;border-radius:9px;resize:vertical;"></textarea>
+    </label>
+    <div style="display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap;">
+      <button class="button" id="publishICubeVideoBtn" onclick="publishICubeVideo()">Upload and publish as i³</button>
+      <span id="icubePublishStatus" style="color:#64748b;font-weight:700;"></span>
+    </div>
+  </div>
+
   <button class="button" id="loadVideosBtn">
     Load Videos
   </button>
@@ -484,6 +524,77 @@
   </div>
 
   <div id="couponsOutput" style="margin-top:20px;overflow:auto;"></div>
+</div>
+
+<div class="page-card" style="margin-top:24px;">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+    <div>
+      <h3 style="margin-bottom:6px;">i³ AI Operations</h3>
+      <p style="margin:0;">Monitor generated replies, provider health, estimated spend and staged rollout controls.</p>
+    </div>
+    <span id="icubeAIOverallStatus" style="padding:7px 12px;border-radius:999px;background:#f1f5f9;color:#475569;font-weight:800;font-size:13px;">Not loaded</span>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:18px;">
+    <div style="padding:16px;border:1px solid #e5e7eb;border-radius:12px;background:#f8fafc;"><div style="font-size:12px;color:#64748b;">Provider</div><div id="icubeAIProviderStatus" style="font-size:21px;font-weight:900;">-</div></div>
+    <div style="padding:16px;border:1px solid #e5e7eb;border-radius:12px;background:#f8fafc;"><div style="font-size:12px;color:#64748b;">Rollout</div><div id="icubeAIRolloutStatus" style="font-size:21px;font-weight:900;">-</div></div>
+    <div style="padding:16px;border:1px solid #e5e7eb;border-radius:12px;background:#f8fafc;"><div style="font-size:12px;color:#64748b;">Generated Today</div><div id="icubeAITodayGenerated" style="font-size:21px;font-weight:900;">-</div></div>
+    <div style="padding:16px;border:1px solid #e5e7eb;border-radius:12px;background:#f8fafc;"><div style="font-size:12px;color:#64748b;">Success Rate</div><div id="icubeAISuccessRate" style="font-size:21px;font-weight:900;">-</div></div>
+    <div style="padding:16px;border:1px solid #e5e7eb;border-radius:12px;background:#f8fafc;"><div style="font-size:12px;color:#64748b;">Moderated</div><div id="icubeAIModerated" style="font-size:21px;font-weight:900;">-</div></div>
+    <div style="padding:16px;border:1px solid #e5e7eb;border-radius:12px;background:#f8fafc;"><div style="font-size:12px;color:#64748b;">Tokens Today</div><div id="icubeAITokensToday" style="font-size:21px;font-weight:900;">-</div></div>
+    <div style="padding:16px;border:1px solid #e5e7eb;border-radius:12px;background:#f8fafc;"><div style="font-size:12px;color:#64748b;">Est. Cost Today</div><div id="icubeAICostToday" style="font-size:21px;font-weight:900;">-</div></div>
+    <div style="padding:16px;border:1px solid #e5e7eb;border-radius:12px;background:#f8fafc;"><div style="font-size:12px;color:#64748b;">P95 Latency</div><div id="icubeAIP95Latency" style="font-size:21px;font-weight:900;">-</div></div>
+  </div>
+
+  <div style="margin-top:18px;padding:18px;border:1px solid #c4b5fd;border-radius:14px;background:#faf5ff;">
+    <h4 style="margin:0 0 14px;color:#5b21b6;">Staged rollout controls</h4>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;">
+      <label style="display:flex;gap:9px;align-items:center;font-weight:700;"><input id="icubeAIEnabled" type="checkbox" /> Generated replies enabled</label>
+      <label style="display:flex;gap:9px;align-items:center;font-weight:700;"><input id="icubeAIAccountContextEnabled" type="checkbox" /> Account context enabled</label>
+      <label style="display:flex;gap:9px;align-items:center;font-weight:700;"><input id="icubeAICircuitEnabled" type="checkbox" /> Circuit breaker enabled</label>
+      <label style="display:grid;gap:5px;font-weight:700;">Rollout percentage
+        <input id="icubeAIRolloutPercent" type="number" min="0" max="100" style="padding:10px;border:1px solid #d1d5db;border-radius:9px;" />
+      </label>
+      <label style="display:grid;gap:5px;font-weight:700;">Model
+        <input id="icubeAIModel" maxlength="100" style="padding:10px;border:1px solid #d1d5db;border-radius:9px;" />
+      </label>
+      <label style="display:grid;gap:5px;font-weight:700;">Daily replies per user
+        <input id="icubeAIDailyLimit" type="number" min="1" max="100" style="padding:10px;border:1px solid #d1d5db;border-radius:9px;" />
+      </label>
+      <label style="display:grid;gap:5px;font-weight:700;">Request timeout (ms)
+        <input id="icubeAITimeoutMs" type="number" min="1000" max="30000" step="500" style="padding:10px;border:1px solid #d1d5db;border-radius:9px;" />
+      </label>
+      <label style="display:grid;gap:5px;font-weight:700;">Maximum output tokens
+        <input id="icubeAIMaxOutputTokens" type="number" min="64" max="600" style="padding:10px;border:1px solid #d1d5db;border-radius:9px;" />
+      </label>
+      <label style="display:grid;gap:5px;font-weight:700;">Circuit window (minutes)
+        <input id="icubeAICircuitWindow" type="number" min="1" max="120" style="padding:10px;border:1px solid #d1d5db;border-radius:9px;" />
+      </label>
+      <label style="display:grid;gap:5px;font-weight:700;">Circuit minimum attempts
+        <input id="icubeAICircuitMinAttempts" type="number" min="1" max="1000" style="padding:10px;border:1px solid #d1d5db;border-radius:9px;" />
+      </label>
+      <label style="display:grid;gap:5px;font-weight:700;">Circuit failure threshold %
+        <input id="icubeAICircuitFailurePercent" type="number" min="1" max="100" step="0.1" style="padding:10px;border:1px solid #d1d5db;border-radius:9px;" />
+      </label>
+      <label style="display:grid;gap:5px;font-weight:700;">Input $ / 1M tokens
+        <input id="icubeAIInputCost" type="number" min="0" max="1000" step="0.01" style="padding:10px;border:1px solid #d1d5db;border-radius:9px;" />
+      </label>
+      <label style="display:grid;gap:5px;font-weight:700;">Cached input $ / 1M
+        <input id="icubeAICachedInputCost" type="number" min="0" max="1000" step="0.01" style="padding:10px;border:1px solid #d1d5db;border-radius:9px;" />
+      </label>
+      <label style="display:grid;gap:5px;font-weight:700;">Output $ / 1M tokens
+        <input id="icubeAIOutputCost" type="number" min="0" max="1000" step="0.01" style="padding:10px;border:1px solid #d1d5db;border-radius:9px;" />
+      </label>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:16px;">
+      <button class="button" id="saveICubeAIRolloutBtn" type="button">Save rollout settings</button>
+      <button class="button" id="loadICubeAIOperationsBtn" type="button" style="background:#64748b;box-shadow:none;">Refresh i³ metrics</button>
+      <span id="icubeAIRolloutSaveStatus" style="font-weight:700;color:#64748b;"></span>
+    </div>
+  </div>
+
+  <div id="icubeAIFootprint" style="margin-top:16px;color:#475569;"></div>
+  <div id="icubeAIRecentFailures" style="margin-top:16px;overflow:auto;"></div>
 </div>
 
 <div class="page-card" style="margin-top:24px;">
