@@ -1428,6 +1428,47 @@ const paymentUserLabel = (payment) =>
   payment.userId ||
   "-";
 
+const paymentProviderLabel = (provider) => {
+  switch (provider) {
+    case "app_store":
+      return "Apple App Store (IAP)";
+    case "google_play":
+      return "Google Play (IAP)";
+    case "razorpay":
+      return "Razorpay";
+    default:
+      return provider || "Unknown";
+  }
+};
+
+const paymentProviderOrderLabel = (provider) => {
+  switch (provider) {
+    case "app_store":
+      return "App Store transaction";
+    case "google_play":
+      return "Google Play transaction";
+    case "razorpay":
+      return "Razorpay order";
+    default:
+      return "Provider order";
+  }
+};
+
+const paymentProviderPaymentLabel = (provider) => {
+  switch (provider) {
+    case "google_play":
+      return "Google Play purchase token";
+    case "razorpay":
+      return "Razorpay payment";
+    default:
+      return "Provider payment";
+  }
+};
+
+const hasDistinctProviderPaymentId = (payment) =>
+  Boolean(payment.providerPaymentId) &&
+  payment.providerPaymentId !== payment.providerOrderId;
+
 const getFilteredPayments = () => {
   const normalizedSearch = paymentManagementState.search.trim().toLowerCase();
 
@@ -1440,6 +1481,7 @@ const getFilteredPayments = () => {
       payment.userEmail,
       payment.userPhoneNumber,
       payment.userDisplayName,
+      payment.provider,
       payment.providerOrderId,
       payment.providerPaymentId,
       payment.starPackCode,
@@ -1519,12 +1561,17 @@ const renderPaymentRows = () => {
         ? `${payment.refundCount} / ${payment.latestRefundFinancialStatus || payment.latestRefundStatus || "-"}`
         : "-";
       const userLabel = paymentUserLabel(payment);
+      const hasDistinctPaymentId = hasDistinctProviderPaymentId(payment);
 
       return `
         <tr style="background:${rowBackground};">
           <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;">
             <strong>${escapeHtml(shortText(userLabel, 34))}</strong><br>
             <span style="color:#64748b;font-size:12px;" title="${escapeHtml(payment.userId)}">${escapeHtml(shortText(payment.userId, 28))}</span>
+          </td>
+          <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;">
+            <strong>${escapeHtml(paymentProviderLabel(payment.provider))}</strong><br>
+            <span style="font-size:12px;color:#64748b;">${escapeHtml(paymentProviderOrderLabel(payment.provider))}</span>
           </td>
           <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;">
             ${paymentStatusBadge(payment.status)}<br>
@@ -1539,8 +1586,8 @@ const renderPaymentRows = () => {
             <span style="color:#64748b;font-size:12px;">${escapeHtml(payment.starPackCode || payment.starPackName || "-")}</span>
           </td>
           <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;">
-            <span title="${escapeHtml(payment.providerPaymentId || "")}">${escapeHtml(shortText(payment.providerPaymentId || "-", 26))}</span><br>
-            <span style="color:#64748b;font-size:12px;" title="${escapeHtml(payment.providerOrderId || "")}">${escapeHtml(shortText(payment.providerOrderId || "-", 26))}</span>
+            <span title="${escapeHtml(payment.providerOrderId || "")}">${escapeHtml(shortText(payment.providerOrderId || "-", 26))}</span>
+            ${hasDistinctPaymentId ? `<br><span style="color:#64748b;font-size:12px;" title="${escapeHtml(payment.providerPaymentId || "")}">${escapeHtml(shortText(payment.providerPaymentId || "-", 26))}</span>` : ""}
           </td>
           <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;">${escapeHtml(refundLabel)}</td>
           <td style="padding:12px;border:1px solid #e5e7eb;vertical-align:middle;white-space:nowrap;">${escapeHtml(formatDateTime(payment.createdAt))}</td>
@@ -1555,7 +1602,7 @@ const renderPaymentRows = () => {
     .join("")
     : `
       <tr>
-        <td colspan="8" style="padding:16px;border:1px solid #e5e7eb;color:#64748b;text-align:center;">
+        <td colspan="9" style="padding:16px;border:1px solid #e5e7eb;color:#64748b;text-align:center;">
           No payments found for this search.
         </td>
       </tr>
@@ -1563,10 +1610,11 @@ const renderPaymentRows = () => {
 
   container.innerHTML = `
     <div style="margin-top:14px;overflow:auto;border:1px solid #dbe3ef;border-radius:14px;">
-      <table style="width:100%;border-collapse:collapse;min-width:1200px;font-family:Inter, Arial, sans-serif;line-height:1.35;">
+      <table style="width:100%;border-collapse:collapse;min-width:1320px;font-family:Inter, Arial, sans-serif;line-height:1.35;">
         <thead>
           <tr style="background:#f8fafc;">
             <th onclick="sortPayments('user')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">User ${sortIcon("user")}</th>
+            <th onclick="sortPayments('provider')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">Purchase channel ${sortIcon("provider")}</th>
             <th onclick="sortPayments('status')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">Status ${sortIcon("status")}</th>
             <th onclick="sortPayments('amount')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">Amount ${sortIcon("amount")}</th>
             <th onclick="sortPayments('totalStars')" style="text-align:left;padding:12px;border:1px solid #e5e7eb;cursor:pointer;">Stars ${sortIcon("totalStars")}</th>
@@ -1638,6 +1686,10 @@ window.showPaymentDetails = async (paymentOrderId) => {
     const refunds = data.refunds || [];
     const walletTransactions = data.walletTransactions || [];
     const invoice = payment.invoice || null;
+    const providerLabel = paymentProviderLabel(payment.provider);
+    const providerOrderLabel = paymentProviderOrderLabel(payment.provider);
+    const providerPaymentLabel = paymentProviderPaymentLabel(payment.provider);
+    const hasDistinctPaymentId = hasDistinctProviderPaymentId(payment);
 
     const refundRows = refunds.length
       ? refunds
@@ -1686,8 +1738,9 @@ window.showPaymentDetails = async (paymentOrderId) => {
         <div><strong>Amount</strong><br>${escapeHtml(formatMoney(payment.amount, payment.currency))}</div>
         <div><strong>Refunded</strong><br>${escapeHtml(formatMoney(payment.refundedAmount, payment.currency))}</div>
         <div><strong>Stars</strong><br>${escapeHtml(payment.totalStars)} total / ${escapeHtml(payment.walletCreditedStars ?? "-")} credited</div>
-        <div><strong>Razorpay Order</strong><br><span title="${escapeHtml(payment.providerOrderId || "")}">${escapeHtml(shortText(payment.providerOrderId || "-", 34))}</span></div>
-        <div><strong>Razorpay Payment</strong><br><span title="${escapeHtml(payment.providerPaymentId || "")}">${escapeHtml(shortText(payment.providerPaymentId || "-", 34))}</span></div>
+        <div><strong>Purchase channel</strong><br>${escapeHtml(providerLabel)}</div>
+        <div><strong>${escapeHtml(providerOrderLabel)}</strong><br><span title="${escapeHtml(payment.providerOrderId || "")}">${escapeHtml(shortText(payment.providerOrderId || "-", 34))}</span></div>
+        ${hasDistinctPaymentId ? `<div><strong>${escapeHtml(providerPaymentLabel)}</strong><br><span title="${escapeHtml(payment.providerPaymentId || "")}">${escapeHtml(shortText(payment.providerPaymentId || "-", 34))}</span></div>` : ""}
       </div>
 
       <h4 style="margin-top:20px;">Invoice</h4>
@@ -1705,7 +1758,7 @@ window.showPaymentDetails = async (paymentOrderId) => {
               </button>
             </div>
           </div>`
-        : `<p style="color:#64748b;">No invoice generated for this payment yet.</p>`
+        : `<p style="color:#64748b;">${["app_store", "google_play"].includes(payment.provider) ? "The store is the merchant of record and provides the customer receipt; iAdMe does not generate a GST invoice for this purchase." : "No invoice generated for this payment yet."}</p>`
       }
 
       <h4 style="margin-top:20px;">Refunds</h4>
