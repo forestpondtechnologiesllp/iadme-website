@@ -77,7 +77,9 @@ const renderVideoPage = ({ request, video }) => {
   const thumbnailUrl = video.thumbnailUrl || "/assets/iadme-logo.png";
   const creatorName = video.creatorName || "Creator";
   const locationParts = [video.locality, video.city].filter(Boolean);
-  const locationLabel = locationParts.length > 0 ? locationParts.join(", ") : "iAdMe";
+  const locationLabel =
+    video.locationLabel ||
+    (locationParts.length > 0 ? locationParts.join(", ") : "iAdMe");
 
   return new Response(
     `<!DOCTYPE html>
