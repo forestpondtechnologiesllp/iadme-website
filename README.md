@@ -10,6 +10,8 @@ Static HTML, CSS and JavaScript served by the existing Cloudflare Pages project 
 - `/share` — app sharing link, QR downloads, four posters and print PDF
 - `/get` — mobile store routing and desktop store-choice page
 
+The homepage also has a clearly labelled Amazon paid-links section (`/#shop-picks`). Its three editorial product cards use manually supplied affiliate URLs and no product photos, prices, ratings, or availability claims. Product photos must not be scraped from Amazon pages or copied from screenshots. Add photos only after an approved Amazon-provided embed/API response or a separately licensed image source is available; keep each image matched to its product and the ad disclosure visible. The links are written directly in `index.html` so changing a card does not require a frontend build. Verify the link destination and product match before publishing any update.
+
 Existing company, policy, account-deletion, advertising and administration pages remain in place. The video share route in `functions/v/[videoId].js` and mobile association files in `.well-known` are preserved.
 
 ## Campaign assets

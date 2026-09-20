@@ -118,6 +118,32 @@
         </div>
       </div>
 
+      <div class="page-card" style="margin-top:24px;" id="affiliateAdsPanel">
+        <h3>Affiliate comment ads</h3>
+        <p>Comments show labelled affiliate link previews. Amazon SiteStripe links can appear as text cards without product photos; a neutral link icon is used until an authorized image is available. Video affiliate overlays are paused. Do not paste scraped image URLs or prices. Amazon links open unchanged. Eligible CueLinks V3 deals may appear as text cards after campaign approval and enablement.</p>
+        <p>CueLinks deals are fetched server-side only for selected, accessible campaigns that explicitly permit the current app platform, Native Ads, and Deals. Your API key stays on the backend.</p>
+        <button class="button" id="loadAffiliateAdsBtn" type="button">Load affiliate inventory</button>
+        <p id="affiliateAdsStatus" role="status" aria-live="polite">Load the selected environment before editing.</p>
+        <p id="affiliateAmazonImageStatus" role="status" aria-live="polite"></p>
+        <fieldset id="affiliateAdsEditor" disabled style="border:0;padding:0;">
+          <label><input id="affiliateAdsEnabled" type="checkbox" /> Enable affiliate ads in this environment</label>
+          <p>Off hides comment affiliate placements. Video affiliate overlays remain paused. Changes reach active apps within about five minutes.</p>
+          <div id="affiliateOfferRows" style="display:grid;gap:12px;margin:16px 0;"></div>
+          <button class="button" id="addAffiliateOfferBtn" type="button">Add Amazon link</button>
+          <div style="margin:18px 0;padding:12px;border:1px solid #cbd5e1;border-radius:10px;">
+            <h4>CueLinks live deals</h4>
+            <label><input id="affiliateCuelinksEnabled" type="checkbox" /> Include CueLinks deals</label>
+            <label for="affiliateCuelinksCampaignIds" style="display:block;margin-top:10px;">Approved campaign IDs (comma or newline separated; max 20)</label>
+            <textarea id="affiliateCuelinksCampaignIds" rows="3" style="display:block;width:100%;box-sizing:border-box;padding:10px;"></textarea>
+            <p id="affiliateCuelinksSetup">Backend key/channel status loads with the inventory.</p>
+            <button class="button" id="previewAffiliateCuelinksAndroidBtn" type="button">Preview Android deals</button>
+            <button class="button" id="previewAffiliateCuelinksIosBtn" type="button">Preview iOS deals</button>
+            <p id="affiliateCuelinksPreview" role="status" aria-live="polite">Save campaign IDs, then preview each platform.</p>
+          </div>
+          <button class="button" id="saveAffiliateAdsBtn" type="button">Save affiliate inventory</button>
+        </fieldset>
+      </div>
+
       <div class="page-card" style="margin-top:24px;">
         <h3>Targets Dashboard</h3>
 

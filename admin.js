@@ -56,6 +56,124 @@ const requestAdminApi = async (path, options = {}) => {
   return body;
 };
 
+// Environment-local catalog editor. Never render administrator-entered copy as HTML.
+let affiliateLoadedTarget = null;
+let affiliateEnvironment = null;
+
+const appendAffiliateOffer = (offer) => {
+  const root = getElement("affiliateOfferRows");
+  if (root.children.length >= 200) throw new Error("Maximum 200 offers per inventory.");
+  const row = document.createElement("div");
+  row.dataset.offerId = offer.id;
+  row.style.cssText = "display:grid;gap:8px;padding:12px;border:1px solid #cbd5e1;border-radius:10px;";
+  const name = document.createElement("strong");
+  name.textContent = offer.id;
+  row.append(name);
+  for (const [key, label, type] of [["title", "Display title", "text"], ["asin", "Amazon product ASIN (10 characters)", "text"], ["url", "Amazon SiteStripe URL", "url"]]) {
+    const field = document.createElement("label");
+    field.textContent = label;
+    const input = document.createElement("input");
+    input.type = type;
+    input.dataset.field = key;
+    input.value = offer[key] || (key === "asin" ? /^amazon-([A-Z0-9]{10})$/.exec(offer.id)?.[1] || "" : "");
+    input.maxLength = key === "title" ? 120 : key === "asin" ? 10 : 2048;
+    input.style.cssText = "display:block;width:100%;padding:10px;box-sizing:border-box;";
+    field.append(input);
+    row.append(field);
+  }
+  const enabledLabel = document.createElement("label");
+  const enabled = document.createElement("input");
+  enabled.type = "checkbox";
+  enabled.dataset.field = "enabled";
+  enabled.checked = offer.enabled === true;
+  enabledLabel.append(enabled, " Offer enabled");
+  row.append(enabledLabel);
+  root.append(row);
+};
+
+const loadAffiliateAds = async () => {
+  const status = getElement("affiliateAdsStatus");
+  const editor = getElement("affiliateAdsEditor");
+  affiliateLoadedTarget = null;
+  editor.disabled = true;
+  status.textContent = "Loading affiliate inventory…";
+  try {
+    const target = getConfig().baseUrl;
+    const result = await requestAdminApi("/admin/affiliate-ads");
+    if (getConfig().baseUrl !== target) throw new Error("Environment changed. Load again.");
+    const inventory = result?.inventory;
+    if (!inventory || !Array.isArray(inventory.offers)) throw new Error("Invalid inventory response.");
+    getElement("affiliateOfferRows").replaceChildren();
+    inventory.offers.forEach(appendAffiliateOffer);
+    getElement("affiliateAdsEnabled").checked = inventory.enabled === true;
+    getElement("affiliateCuelinksEnabled").checked = inventory.cuelinks?.enabled === true;
+    getElement("affiliateCuelinksCampaignIds").value = (inventory.cuelinks?.campaignIds || []).join(", ");
+    const setup = result.cuelinksSetup || {};
+    getElement("affiliateCuelinksSetup").textContent = `Backend API key: ${setup.apiConfigured ? "configured" : "missing"}. Android channel: ${setup.androidChannelId || "missing"}. iOS channel: ${setup.iosChannelId || "missing"}.`;
+    getElement("affiliateAmazonImageStatus").textContent = result.amazonImagesConfigured
+      ? "Amazon Creators API credentials are configured. Authorized product images may appear in comment cards when returned. Video overlays remain paused."
+      : "Amazon Creators API credentials are missing. Amazon text link cards can still appear in comments with a neutral link icon; video overlays remain paused.";
+    affiliateLoadedTarget = target;
+    affiliateEnvironment = result.environment;
+    editor.disabled = false;
+    status.textContent = `Loaded ${inventory.offers.length} offers from ${affiliateEnvironment}. Serving: ${inventory.enabled ? "enabled" : "disabled"}.`;
+  } catch (error) {
+    status.textContent = `Could not load: ${error.message}`;
+  }
+};
+
+const saveAffiliateAds = async () => {
+  const status = getElement("affiliateAdsStatus");
+  const editor = getElement("affiliateAdsEditor");
+  try {
+    if (!affiliateLoadedTarget || getConfig().baseUrl !== affiliateLoadedTarget) {
+      throw new Error("Load the selected environment again before saving.");
+    }
+    const inventory = {
+      enabled: getElement("affiliateAdsEnabled").checked,
+      offers: Array.from(getElement("affiliateOfferRows").children).map((row) => ({
+        id: row.dataset.offerId,
+        provider: "amazon",
+        title: row.querySelector('[data-field="title"]').value.trim(),
+        asin: row.querySelector('[data-field="asin"]').value.trim().toUpperCase(),
+        url: row.querySelector('[data-field="url"]').value.trim(),
+        enabled: row.querySelector('[data-field="enabled"]').checked,
+      })),
+      cuelinks: {
+        enabled: getElement("affiliateCuelinksEnabled").checked,
+        campaignIds: getElement("affiliateCuelinksCampaignIds").value
+          .split(/[\s,]+/).filter(Boolean).map((value) => {
+            if (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value)) || Number(value) <= 0) {
+              throw new Error(`Invalid CueLinks campaign ID: ${value}`);
+            }
+            return Number(value);
+          }),
+      },
+    };
+    if (!window.confirm(`Save ${inventory.offers.length} offers to ${affiliateEnvironment} (${affiliateLoadedTarget})? Affiliate ads will be ${inventory.enabled ? "ENABLED" : "DISABLED"}.`)) return;
+    editor.disabled = true;
+    await requestAdminApi("/admin/affiliate-ads", { method: "PUT", body: JSON.stringify(inventory) });
+    status.textContent = `Saved to ${affiliateEnvironment}. Serving: ${inventory.enabled ? "enabled" : "disabled"}.`;
+  } catch (error) {
+    status.textContent = `Not saved: ${error.message}`;
+  } finally {
+    editor.disabled = affiliateLoadedTarget === null;
+  }
+};
+
+const previewAffiliateCuelinks = async (platform) => {
+  const status = getElement("affiliateCuelinksPreview");
+  try {
+    if (!affiliateLoadedTarget || getConfig().baseUrl !== affiliateLoadedTarget) {
+      throw new Error("Load the selected environment again before previewing.");
+    }
+    status.textContent = `Checking ${platform} channel and campaigns…`;
+    const result = await requestAdminApi(`/admin/affiliate-ads/cuelinks/preview?platform=${platform}`);
+    const reasons = (result.skipped || []).map((item) => `${item.campaignId}: ${item.reason}`);
+    status.textContent = `${platform}: ${result.offers?.length || 0} eligible live deals. Selected and enabled deals can appear as labelled text cards in comments; CueLinks V3 does not supply product images. ${reasons.length ? `Skipped: ${reasons.join("; ")}` : ""}`;
+  } catch (error) { status.textContent = `Preview failed: ${error.message}`; }
+};
+
 window.publishICubeVideo = async () => {
   const fileInput = getElement("icubeVideoFile");
   const titleInput = getElement("icubeVideoTitle");
@@ -3556,6 +3674,15 @@ const bindEvents = () => {
 
   getElement("adminEnv")?.addEventListener("change", applyEnvironmentSelection);
   getElement("saveConfigBtn")?.addEventListener("click", saveConfig);
+  getElement("loadAffiliateAdsBtn")?.addEventListener("click", loadAffiliateAds);
+  getElement("saveAffiliateAdsBtn")?.addEventListener("click", saveAffiliateAds);
+  getElement("previewAffiliateCuelinksAndroidBtn")?.addEventListener("click", () => previewAffiliateCuelinks("android"));
+  getElement("previewAffiliateCuelinksIosBtn")?.addEventListener("click", () => previewAffiliateCuelinks("ios"));
+  getElement("addAffiliateOfferBtn")?.addEventListener("click", () => {
+    try {
+      appendAffiliateOffer({ id: `amazon-${crypto.randomUUID()}`, title: "", url: "", enabled: true });
+    } catch (error) { getElement("affiliateAdsStatus").textContent = error.message; }
+  });
 
   getElement("adminLoginBtn")?.addEventListener("click", loginAdmin);
   getElement("adminLogoutBtn")?.addEventListener("click", logoutAdmin);
