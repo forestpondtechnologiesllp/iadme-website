@@ -49,7 +49,13 @@ const requestAdminApi = async (path, options = {}) => {
   const body = await response.json().catch(() => null);
 
   if (!response.ok && !(allowConflict && response.status === 409)) {
-    const message = body?.error?.message || `Request failed with ${response.status}`;
+    const fields = body?.error?.details?.fieldErrors;
+    const validationDetails = fields && typeof fields === "object"
+      ? Object.entries(fields).flatMap(([field, errors]) =>
+          Array.isArray(errors) ? errors.map((error) => `${field}: ${error}`) : []).join("; ")
+      : "";
+    const message = body?.error?.message || validationDetails || body?.error?.code ||
+      `Request failed with ${response.status}`;
     throw new Error(message);
   }
 
@@ -2460,6 +2466,116 @@ const loadUsers = async () => {
   }
 };
 
+let officialPreview = null;
+let officialCampaignId = null;
+
+const officialDraft = () => {
+  const ids = [...new Set(getElement("officialRecipientIds").value
+    .split(/[\s,]+/).map((id) => id.trim()).filter(Boolean))];
+  const scheduledText = getElement("officialScheduledAt").value;
+  return {
+    messageClass: getElement("officialMessageClass").value,
+    subject: getElement("officialMessageSubject").value.trim(),
+    recipientUserIds: ids,
+    body: getElement("officialMessageBody").value.trim(),
+    scheduledAt: scheduledText ? new Date(scheduledText).toISOString() : null,
+  };
+};
+
+const invalidateOfficialPreview = () => {
+  officialPreview = null;
+  officialCampaignId = null;
+  getElement("sendOfficialMessageBtn").disabled = true;
+  getElement("officialMessagePreview").replaceChildren();
+};
+
+const previewOfficialMessage = async () => {
+  const output = getElement("officialMessagePreview");
+  try {
+    const draft = officialDraft();
+    if (!draft.recipientUserIds.length || draft.recipientUserIds.length > 100)
+      throw new Error("Enter 1 to 100 registered emails or user IDs.");
+    if (!draft.subject || draft.subject.length > 160)
+      throw new Error("Enter a subject of 1 to 160 characters.");
+    if (!draft.body || draft.body.length > 1950)
+      throw new Error("Enter a message of 1 to 1950 characters.");
+    if (draft.scheduledAt && new Date(draft.scheduledAt).getTime() > Date.now() + 30 * 86400000)
+      throw new Error("Schedule within the next 30 days.");
+    const preview = await requestAdminApi("/admin/messages/recipients/preview", {
+      method: "POST", body: JSON.stringify({ recipientUserIds: draft.recipientUserIds,
+        messageClass: draft.messageClass }),
+    });
+    if (preview.invalidIds.length) throw new Error(
+      `Could not uniquely match an active registered user for: ${preview.invalidIds.slice(0, 5).join(", ")}${preview.invalidIds.length > 5 ? "…" : ""}`,
+    );
+    officialPreview = draft;
+    officialCampaignId = crypto.randomUUID();
+    output.replaceChildren();
+    const heading = document.createElement("strong");
+    heading.textContent = `${preview.targeted} active recipient(s) · ${draft.messageClass} · ${draft.subject}`;
+    const note = document.createElement("p");
+    note.textContent = draft.scheduledAt ? `Scheduled for ${new Date(draft.scheduledAt).toLocaleString()}` : "Send as soon as queued";
+    if (preview.marketingSuppressed) note.textContent += ` · ${preview.marketingSuppressed} without marketing opt-in will be suppressed`;
+    const copy = document.createElement("pre");
+    copy.style.cssText = "white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:8px;";
+    copy.textContent = `${draft.body.replace(/\s*reach us at support@iadme\.app\s*$/i, "").trim()}\n\nreach us at support@iadme.app`;
+    output.append(heading, note, copy);
+    getElement("sendOfficialMessageBtn").disabled = false;
+  } catch (error) {
+    invalidateOfficialPreview();
+    output.textContent = error.message;
+  }
+};
+
+const sendOfficialMessage = async () => {
+  const status = getElement("officialMessageStatus");
+  try {
+    if (!officialPreview || JSON.stringify(officialDraft()) !== JSON.stringify(officialPreview))
+      throw new Error("Draft changed. Preview again before sending.");
+    const draft = officialPreview;
+    if (!window.confirm(`Queue this ${draft.messageClass} message for ${draft.recipientUserIds.length} recipient(s)?`)) return;
+    const payload = { ...draft, id: officialCampaignId, confirm: true };
+    if (!payload.scheduledAt) delete payload.scheduledAt;
+    const result = await requestAdminApi("/admin/messages/campaigns", {
+      method: "POST", body: JSON.stringify(payload),
+    });
+    getElement("officialCampaignLookup").value = result.id;
+    status.textContent = `Campaign ${result.id} queued. ${result.targeted} targeted; ${result.created} created; ${result.suppressed} suppressed.`;
+    invalidateOfficialPreview();
+    setTimeout(refreshOfficialMessageStatus, 20000);
+  } catch (error) { status.textContent = error.message; }
+};
+
+const refreshOfficialMessageStatus = async () => {
+  const status = getElement("officialMessageStatus");
+  try {
+    const id = getElement("officialCampaignLookup").value.trim();
+    if (!id) throw new Error("Enter a campaign ID.");
+    const latest = await requestAdminApi(`/admin/messages/campaigns/${encodeURIComponent(id)}`);
+    status.textContent = `Campaign ${latest.id}: ${latest.targeted} targeted, ${latest.created} in Inbox, ${latest.pending} pending, ${latest.suppressed} suppressed, ${latest.failed} failed, ${latest.emailsSent} emails accepted, ${latest.emailsFailed} emails failed, ${latest.emailsSkipped} no email address, ${latest.pushAttempted} push attempts.`;
+  } catch (error) { status.textContent = error.message; }
+};
+
+const retryOfficialMessageFailures = async () => {
+  const status = getElement("officialMessageStatus");
+  try {
+    const id = getElement("officialCampaignLookup").value.trim();
+    if (!id) throw new Error("Enter a campaign ID.");
+    if (!window.confirm(`Retry failed recipients for campaign ${id}?`)) return;
+    const result = await requestAdminApi(`/admin/messages/campaigns/${encodeURIComponent(id)}/retry`, { method: "POST" });
+    status.textContent = `${result.retried} failed recipient(s) queued for retry.`;
+  } catch (error) { status.textContent = error.message; }
+};
+
+window.addOfficialRecipient = (id) => {
+  const input = getElement("officialRecipientIds");
+  const ids = new Set(input.value.split(/[\s,]+/).filter(Boolean));
+  ids.add(id);
+  input.value = [...ids].join("\n");
+  input.scrollIntoView({ behavior: "smooth", block: "center" });
+  invalidateOfficialPreview();
+};
+
 const getUserSortValue = (user, key) => {
   if (key === "createdAt") return new Date(user.createdAt ?? 0).getTime();
   if (key === "phoneVerified") return user.phoneVerified ? 1 : 0;
@@ -2553,6 +2669,7 @@ const renderUsersTable = () => {
             <button onclick="copyUserId('${escapeHtml(user.id)}')" style="padding:8px 12px;border-radius:9px;border:1px solid #64748b;background:#fff;color:#334155;font-weight:800;cursor:pointer;margin-left:6px;">
               Copy ID
             </button>
+            ${!isInactive ? `<button onclick="addOfficialRecipient('${escapeHtml(user.id)}')" style="padding:8px 12px;border-radius:9px;border:1px solid #8b5cf6;background:#fff;color:#5b21b6;font-weight:800;cursor:pointer;margin-left:6px;">Message</button>` : ""}
             ${isInactive
               ? `<button onclick="reactivateUserFromTable('${escapeHtml(user.id)}')" style="padding:8px 12px;border-radius:9px;border:1px solid #16a34a;background:#16a34a;color:white;font-weight:800;cursor:pointer;margin-left:6px;">Reactivate</button>`
               : `<button onclick="deactivateUserFromTable('${escapeHtml(user.id)}')" style="padding:8px 12px;border-radius:9px;border:1px solid #dc2626;background:#dc2626;color:white;font-weight:800;cursor:pointer;margin-left:6px;">Deactivate</button>`
@@ -3691,6 +3808,12 @@ const bindEvents = () => {
   getElement("loadVideosBtn")?.addEventListener("click", loadVideos);
   getElement("loadCommentsBtn")?.addEventListener("click", loadComments);
   getElement("loadUsersBtn")?.addEventListener("click", loadUsers);
+  getElement("previewOfficialMessageBtn")?.addEventListener("click", previewOfficialMessage);
+  getElement("sendOfficialMessageBtn")?.addEventListener("click", sendOfficialMessage);
+  getElement("refreshOfficialMessageBtn")?.addEventListener("click", refreshOfficialMessageStatus);
+  getElement("retryOfficialMessageBtn")?.addEventListener("click", retryOfficialMessageFailures);
+  ["officialMessageClass", "officialRecipientIds", "officialMessageSubject", "officialMessageBody", "officialScheduledAt"]
+    .forEach((id) => getElement(id)?.addEventListener("input", invalidateOfficialPreview));
   getElement("loadReportsBtn")?.addEventListener("click", loadReports);
   getElement("loadPaymentsBtn")?.addEventListener("click", loadPayments);
   getElement("loadCommerceDashboardBtn")?.addEventListener("click", loadCommerceDashboard);

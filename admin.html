@@ -352,6 +352,46 @@
 
 
 <div class="page-card" style="margin-top:24px;">
+  <h3>Official Inbox</h3>
+  <p>Send read-only notices to Profile → Inbox and the user's registered email from noreply@iadme.app. Select up to 100 active users by registered email or user ID. Marketing reaches only users who enabled marketing notifications.</p>
+  <div style="display:grid;gap:12px;max-width:760px;">
+    <label>Message class
+      <select id="officialMessageClass" style="display:block;width:100%;padding:10px;">
+        <option value="support">Support notice (read-only)</option>
+        <option value="transactional">Account / transaction</option>
+        <option value="security">Security</option>
+        <option value="reward">Reward</option>
+        <option value="product">Product update</option>
+        <option value="marketing">Marketing (opt-in only)</option>
+      </select>
+    </label>
+    <label>Recipient emails or user IDs (one per line)
+      <textarea id="officialRecipientIds" rows="4" placeholder="Paste registered emails or user IDs, or use Message in User Management" style="display:block;width:100%;box-sizing:border-box;padding:10px;"></textarea>
+    </label>
+    <label>Subject
+      <input id="officialMessageSubject" type="text" maxlength="160" placeholder="Subject shown in Inbox and email" style="display:block;width:100%;box-sizing:border-box;padding:10px;" />
+    </label>
+    <label>Message text
+      <textarea id="officialMessageBody" rows="5" maxlength="1950" placeholder="Plain text only. Never request passwords, OTPs or payment details." style="display:block;width:100%;box-sizing:border-box;padding:10px;"></textarea>
+    </label>
+    <label>Schedule (optional, local time)
+      <input id="officialScheduledAt" type="datetime-local" style="display:block;padding:10px;" />
+    </label>
+    <div><button class="button" id="previewOfficialMessageBtn" type="button">Preview recipients and message</button></div>
+    <div id="officialMessagePreview" role="status" aria-live="polite"></div>
+    <div><button class="button" id="sendOfficialMessageBtn" type="button" disabled>Confirm and queue message</button></div>
+    <label>Campaign status ID
+      <input id="officialCampaignLookup" type="text" placeholder="Campaign ID" style="display:block;width:100%;box-sizing:border-box;padding:10px;" />
+    </label>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="button" id="refreshOfficialMessageBtn" type="button">Refresh status</button>
+      <button class="button" id="retryOfficialMessageBtn" type="button">Retry failed recipients</button>
+    </div>
+    <div id="officialMessageStatus" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<div class="page-card" style="margin-top:24px;">
   <h3>Ads Console</h3>
 
   <p>
