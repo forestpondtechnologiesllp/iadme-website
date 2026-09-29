@@ -2942,6 +2942,47 @@ const loadReports = async () => {
   }
 };
 
+const renderSupportTable = (rows, columns, outputId, emptyText) => {
+  const output = getElement(outputId);
+  if (!output) return;
+  if (!rows.length) {
+    output.textContent = emptyText;
+    return;
+  }
+  output.innerHTML = `<table style="width:100%;border-collapse:collapse;min-width:650px;">
+    <thead><tr>${columns.map(([label]) => `<th style="text-align:left;padding:10px;border-bottom:1px solid #cbd5e1;">${escapeHtml(label)}</th>`).join("")}</tr></thead>
+    <tbody>${rows.map((row) => `<tr>${columns.map(([, key]) => `<td style="padding:10px;border-bottom:1px solid #e5e7eb;vertical-align:top;white-space:pre-wrap;">${escapeHtml(row[key] ?? "")}</td>`).join("")}</tr>`).join("")}</tbody>
+  </table>`;
+};
+
+const loadPlaybackIssues = async () => {
+  try {
+    const data = await requestAdminApi("/admin/playback-issues");
+    renderSupportTable(data?.issues || [], [
+      ["When (UTC)", "created_at"], ["Video ID", "video_id"],
+      ["User ID", "user_id"], ["Reason", "reason"],
+      ["Details", "details"], ["Platform", "platform"],
+      ["Surface", "surface"], ["Position (ms)", "position_ms"],
+      ["App version", "app_version"], ["Media job", "mediaconvert_job_id"],
+      ["Processing", "processing_status"],
+    ], "playbackIssuesOutput", "No playback issues found.");
+  } catch (error) {
+    writeOutput("playbackIssuesOutput", error.message);
+  }
+};
+
+const loadAppFeedback = async () => {
+  try {
+    const data = await requestAdminApi("/admin/feedback");
+    renderSupportTable(data?.feedback || [], [
+      ["When (UTC)", "created_at"], ["User ID", "user_id"],
+      ["Rating", "rating"], ["Feedback", "reason"],
+    ], "appFeedbackOutput", "No app feedback found.");
+  } catch (error) {
+    writeOutput("appFeedbackOutput", error.message);
+  }
+};
+
 const renderReportsTable = () => {
   const container = getElement("reportsOutput");
   if (!container) return;
@@ -3815,6 +3856,8 @@ const bindEvents = () => {
   ["officialMessageClass", "officialRecipientIds", "officialMessageSubject", "officialMessageBody", "officialScheduledAt"]
     .forEach((id) => getElement(id)?.addEventListener("input", invalidateOfficialPreview));
   getElement("loadReportsBtn")?.addEventListener("click", loadReports);
+  getElement("loadPlaybackIssuesBtn")?.addEventListener("click", loadPlaybackIssues);
+  getElement("loadAppFeedbackBtn")?.addEventListener("click", loadAppFeedback);
   getElement("loadPaymentsBtn")?.addEventListener("click", loadPayments);
   getElement("loadCommerceDashboardBtn")?.addEventListener("click", loadCommerceDashboard);
   getElement("runPaymentReconciliationBtn")?.addEventListener("click", runPaymentReconciliation);

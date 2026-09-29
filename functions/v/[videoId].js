@@ -124,7 +124,7 @@ const renderVideoPage = ({ request, video }) => {
         aria-label="Open this video in iAdMe"
       >
         <img src="${escapeHtml(thumbnailUrl)}" alt="${escapeHtml(title)}" class="share-thumbnail" />
-        <div class="share-play-badge">▶</div>
+        <div class="share-play-badge" aria-hidden="true">↗</div>
       </a>
 
       <div class="share-content">
@@ -140,11 +140,36 @@ const renderVideoPage = ({ request, video }) => {
           <span>${formatNumber(video.shareCount)} shares</span>
         </div>
 
-        <a class="button share-open-button" href="iadme://video/${encodeURIComponent(video.id)}">Open in iAdMe</a>
-        <p class="share-help-text">App deep links are being prepared. If the app does not open, iAdMe mobile app availability is coming soon.</p>
+        <a class="button share-install-button" id="install-app" href="/get">Install iAdMe</a>
+        <a class="button share-open-button" href="iadme://video/${encodeURIComponent(video.id)}">Already installed? Open this reel in iAdMe</a>
+        <div class="share-store-links">
+          <a href="https://apps.apple.com/app/id6778307078">App Store</a>
+          <a href="https://play.google.com/store/apps/details?id=app.iadme.mobile">Google Play</a>
+        </div>
+        <p class="share-help-text">After installing, reopen this link to watch this reel. The store cannot pass this page directly to a fresh installation.</p>
+        <button class="share-copy-link" type="button" data-share-url="${escapeHtml(canonicalUrl)}">Copy reel link</button>
+        <p class="share-copy-status" role="status" aria-live="polite"></p>
       </div>
     </section>
   </main>
+  <script>
+    const install = document.getElementById("install-app");
+    if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+      install.href = "https://apps.apple.com/app/id6778307078";
+    } else if (/Android/i.test(navigator.userAgent)) {
+      install.href = "https://play.google.com/store/apps/details?id=app.iadme.mobile";
+    }
+    document.querySelector(".share-copy-link").addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const status = document.querySelector(".share-copy-status");
+      try {
+        await navigator.clipboard.writeText(button.dataset.shareUrl);
+        status.textContent = "Link copied. Open it again after installing.";
+      } catch (_) {
+        status.textContent = "Copy this page's address to open it after installing.";
+      }
+    });
+  </script>
 </body>
 </html>`,
     {
