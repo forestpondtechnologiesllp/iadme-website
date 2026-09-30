@@ -1,3 +1,9 @@
+function renderPostPhotos(post) {
+  if (post?.type !== "PHOTO_POST") return "";
+  return `<div aria-label="Photo post">${(post.photos || []).slice(0, 5).map((photo, index) =>
+    `<figure style="margin:0 0 12px"><img src="${escapeHtml(photo.url)}" alt="Photo ${index + 1}" loading="lazy" style="display:block;width:100%;max-height:520px;object-fit:contain;border-radius:12px" /><figcaption style="color:#fff">Photo ${index + 1}</figcaption></figure>`).join("")}</div>`;
+}
+
 const ENVIRONMENTS = {
   local: "http://localhost:3000",
   staging: "https://staging-api.iadme.app",
@@ -41,6 +47,7 @@ const requestAdminApi = async (path, options = {}) => {
     ...fetchOptions,
     headers: {
       Authorization: `Bearer ${token}`,
+      "X-Iadme-Content": "photo-v1",
       "Content-Type": "application/json",
       ...(fetchOptions.headers || {}),
     },
@@ -864,7 +871,7 @@ const renderSelectedVideoDetails = (videoId, video) => {
 
     <div style="display:grid;grid-template-columns:minmax(280px, 420px) 1fr;gap:18px;align-items:start;">
       <div style="border:1px solid #e5e7eb;border-radius:16px;background:#020617;padding:12px;">
-        ${playbackUrl
+        ${video.video?.type === "PHOTO_POST" ? renderPostPhotos(video.video) : playbackUrl
           ? `<video controls playsinline preload="metadata" poster="${escapeHtml(thumbnailUrl)}" src="${escapeHtml(playbackUrl)}" style="width:100%;max-height:520px;border-radius:12px;background:#000;display:block;"></video>`
           : `<div style="min-height:260px;display:grid;place-items:center;color:#cbd5e1;background:#0f172a;border-radius:12px;">No playback URL available</div>`
         }
@@ -3248,7 +3255,7 @@ const renderSelectedReportDetails = (
 
     <div style="display:grid;grid-template-columns:minmax(280px, 420px) 1fr;gap:18px;align-items:start;">
       <div style="border:1px solid #e5e7eb;border-radius:16px;background:#020617;padding:12px;">
-        ${playbackUrl
+        ${video.video?.type === "PHOTO_POST" ? renderPostPhotos(video.video) : playbackUrl
           ? `<video
               controls
               playsinline

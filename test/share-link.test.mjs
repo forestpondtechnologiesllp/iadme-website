@@ -46,3 +46,19 @@ test('unavailable reel is not offered for opening', async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test('photo link opts in to photo posts and keeps a thumbnail-only public preview', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_url, options) => {
+    assert.equal(options.headers['X-Iadme-Content'], 'photo-v1');
+    return new Response(JSON.stringify({type:'PHOTO_POST',id:'photo-123',title:'Photos',thumbnailUrl:'https://images.example.invalid/thumb.webp',photos:[{url:'https://images.example.invalid/display.webp'}]}));
+  };
+  try {
+    const response = await onRequestGet({request:new Request('https://iadme.app/v/photo-123'),params:{videoId:'photo-123'}});
+    const html = await response.text();
+    assert.equal(response.status,200);
+    assert.match(html,/Open this photo post in iAdMe/);
+    assert.match(html,/og:type" content="article/);
+    assert.doesNotMatch(html,/<video|display.webp/);
+  } finally {globalThis.fetch=originalFetch;}
+});

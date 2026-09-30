@@ -70,10 +70,12 @@ const renderErrorPage = ({ status, title, message }) => {
 const renderVideoPage = ({ request, video }) => {
   const url = new URL(request.url);
   const canonicalUrl = `${url.origin}/v/${encodeURIComponent(video.id)}`;
-  const title = video.title?.trim() || "Watch this video on iAdMe";
+  const isPhoto = video.type === "PHOTO_POST";
+  const contentLabel = isPhoto ? "photo post" : "reel";
+  const title = video.title?.trim() || `View this ${contentLabel} on iAdMe`;
   const description =
     video.description?.trim() ||
-    `Watch ${video.creatorName || "a creator"}'s video on iAdMe.`;
+    `View ${video.creatorName || "a creator"}'s ${contentLabel} on iAdMe.`;
   const thumbnailUrl = video.thumbnailUrl || "/assets/iadme-logo.png";
   const creatorName = video.creatorName || "Creator";
   const locationParts = [video.locality, video.city].filter(Boolean);
@@ -93,7 +95,7 @@ const renderVideoPage = ({ request, video }) => {
   <link rel="icon" href="/favicon.ico" />
   <link rel="apple-touch-icon" href="/favicon.png" />
 
-  <meta property="og:type" content="video.other" />
+  <meta property="og:type" content="${isPhoto ? "article" : "video.other"}" />
   <meta property="og:site_name" content="iAdMe" />
   <meta property="og:title" content="${escapeHtml(title)}" />
   <meta property="og:description" content="${escapeHtml(description.slice(0, 220))}" />
@@ -121,7 +123,7 @@ const renderVideoPage = ({ request, video }) => {
       <a
         class="share-thumbnail-wrap share-thumbnail-link"
         href="iadme://video/${encodeURIComponent(video.id)}"
-        aria-label="Open this video in iAdMe"
+        aria-label="Open this ${contentLabel} in iAdMe"
       >
         <img src="${escapeHtml(thumbnailUrl)}" alt="${escapeHtml(title)}" class="share-thumbnail" />
         <div class="share-play-badge" aria-hidden="true">↗</div>
@@ -141,13 +143,13 @@ const renderVideoPage = ({ request, video }) => {
         </div>
 
         <a class="button share-install-button" id="install-app" href="/get">Install iAdMe</a>
-        <a class="button share-open-button" href="iadme://video/${encodeURIComponent(video.id)}">Already installed? Open this reel in iAdMe</a>
+        <a class="button share-open-button" href="iadme://video/${encodeURIComponent(video.id)}">Already installed? Open this ${contentLabel} in iAdMe</a>
         <div class="share-store-links">
           <a href="https://apps.apple.com/app/id6778307078">App Store</a>
           <a href="https://play.google.com/store/apps/details?id=app.iadme.mobile">Google Play</a>
         </div>
-        <p class="share-help-text">After installing, reopen this link to watch this reel. The store cannot pass this page directly to a fresh installation.</p>
-        <button class="share-copy-link" type="button" data-share-url="${escapeHtml(canonicalUrl)}">Copy reel link</button>
+        <p class="share-help-text">After installing, reopen this link to view this ${contentLabel}. The store cannot pass this page directly to a fresh installation.</p>
+        <button class="share-copy-link" type="button" data-share-url="${escapeHtml(canonicalUrl)}">Copy ${contentLabel} link</button>
         <p class="share-copy-status" role="status" aria-live="polite"></p>
       </div>
     </section>
@@ -200,6 +202,7 @@ export async function onRequestGet(context) {
     const response = await fetch(apiUrl, {
       headers: {
         accept: "application/json",
+        "X-Iadme-Content": "photo-v1",
       },
     });
 
