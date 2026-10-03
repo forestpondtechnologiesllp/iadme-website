@@ -3781,7 +3781,9 @@ const restoreConfig = () => {
   const baseUrlInput = getElement("baseUrl");
   const tokenInput = getElement("adminToken");
 
-  const savedEnv = localStorage.getItem(STORAGE_KEYS.env) || "production";
+  const defaultEnv = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname)
+    ? "local" : "production";
+  const savedEnv = localStorage.getItem(STORAGE_KEYS.env) || defaultEnv;
   const savedBaseUrl = localStorage.getItem(STORAGE_KEYS.baseUrl);
   const savedToken = localStorage.getItem(STORAGE_KEYS.token);
 
@@ -3790,7 +3792,7 @@ const restoreConfig = () => {
   }
 
   if (baseUrlInput) {
-    baseUrlInput.value = savedBaseUrl || ENVIRONMENTS[savedEnv] || ENVIRONMENTS.production;
+    baseUrlInput.value = savedBaseUrl || ENVIRONMENTS[savedEnv] || ENVIRONMENTS[defaultEnv];
   }
 
   if (tokenInput && savedToken) {
@@ -3810,7 +3812,94 @@ const restoreConfig = () => {
   );
 };
 
+const listingElement = (tag, text) => {
+  const element = document.createElement(tag);
+  if (text !== undefined) element.textContent = text;
+  return element;
+};
+const listingAdminAction = async (action) => {
+  const status = getElement("listingsAdminStatus");
+  try { status.textContent = "Working…"; await action(); status.textContent = "Updated."; }
+  catch (error) { status.textContent = error.message || "Request failed. Retry."; }
+};
+const listingButton = (text, action) => {
+  const button = listingElement("button", text); button.type = "button";
+  button.style.margin = "6px";
+  button.addEventListener("click", () => listingAdminAction(async () => {
+    button.disabled = true;
+    try { await action(); } finally { button.disabled = false; }
+  }));
+  return button;
+};
+const inspectListing = async (id) => {
+  const l = await requestAdminApi(`/admin/listings/${encodeURIComponent(id)}`);
+  const detail = getElement("listingsAdminDetail"); detail.replaceChildren();
+  detail.append(listingElement("h3", `${l.title} · ${l.status}`),
+    listingElement("p", `${l.category} · ₹${l.price} · ${l.locality} · advertiser ${l.ownerId}`),
+    listingElement("p", l.description));
+  for (const [key, value] of Object.entries(l.details || {})) detail.append(listingElement("p", `${key}: ${value}`));
+  for (const photo of l.photos || []) {
+    const image = document.createElement("img"); image.src = photo.url;
+    image.alt = "Listing photo under review"; image.referrerPolicy = "no-referrer";
+    image.style.cssText = "max-width:240px;max-height:300px;margin:8px;object-fit:contain";
+    detail.append(image);
+  }
+  detail.append(listingElement("p", l.holdUntil ? `Evidence hold until ${l.holdUntil}: ${l.holdReason}` : "No active evidence hold"));
+  detail.append(listingButton("Set / release evidence hold", async () => {
+    const days = prompt("Hold length in days (1–365), or 0 to release. Review unresolved reports before release.");
+    if (days === null) return;
+    const count = Number(days);
+    if (!Number.isInteger(count) || count < 0 || count > 365) throw new Error("Enter 0–365 days.");
+    const reason = prompt("Document the reason for this hold or release.");
+    if (!reason || reason.trim().length < 5) throw new Error("A reason is required.");
+    const until = count === 0 ? null : new Date(Date.now() + count * 86400000).toISOString();
+    await requestAdminApi(`/admin/listings/${encodeURIComponent(id)}/hold`, {method:"PUT",body:JSON.stringify({until,reason:reason.trim()})});
+    await inspectListing(id);
+  }));
+  const comments = await requestAdminApi(`/admin/listings/${encodeURIComponent(id)}/comments`);
+  detail.append(listingElement("h4", "Public comments"));
+  for (const comment of comments.items) {
+    const row = listingElement("p", `${comment.id} · ${comment.name}: ${comment.body}`);
+    row.append(listingButton("Remove comment", async () => {
+      await requestAdminApi(`/admin/listings/${encodeURIComponent(id)}/comments/${encodeURIComponent(comment.id)}`, { method: "DELETE" });
+      await inspectListing(id);
+    })); detail.append(row);
+  }
+  const reason = document.createElement("textarea"); reason.placeholder = "Required moderation reason (3–1000 characters)"; reason.maxLength = 1000;
+  reason.setAttribute("aria-label", "Moderation reason"); detail.append(reason);
+  for (const action of l.status === "published" ? ["approve", "remove"] : l.status === "pending" ? ["reject", "remove"] : ["remove"]) {
+    detail.append(listingButton(action === "approve" ? "Mark reviewed" : action,
+      async () => {
+        if (reason.value.trim().length < 3) throw new Error("Enter a moderation reason.");
+        if (!confirm(`${action === "approve" ? "Mark reviewed" : action} this listing?`)) return;
+        await requestAdminApi(`/admin/listings/${encodeURIComponent(id)}/moderate`, {method:"POST", body:JSON.stringify({action,reason:reason.value.trim()})});
+        await loadListingsAdmin(); await inspectListing(id);
+      }));
+  }
+};
+const loadListingsAdmin = async () => {
+  const result = await requestAdminApi("/admin/listings");
+  const queue = getElement("listingsAdminQueue"), reports = getElement("listingsAdminReports");
+  queue.replaceChildren(listingElement("h3", "Review queue and recent listings (up to 100)"));
+  for (const l of result.items) {
+    const row = listingElement("p", `${l.status} · ${l.status === "published" ? (l.reviewed_by ? "Reviewed" : "Awaiting later review") + " · " : ""}${l.category} · ${l.title}`);
+    row.append(listingButton("Inspect", () => inspectListing(l.id))); queue.append(row);
+  }
+  reports.replaceChildren(listingElement("h3", "Open listing / seller-review reports"));
+  for (const r of result.reports) {
+    const row = listingElement("div");
+    row.append(listingElement("p", `${r.title}: ${r.reason}${r.review_id ? ` · review ${r.review_id} · ${r.review_rating}/5: ${r.review_body}` : ""}`),listingButton("Inspect listing",()=>inspectListing(r.listing_id)));
+    for (const status of ["resolved", "dismissed"]) row.append(listingButton(status, async () => {
+      const hideReview = Boolean(r.review_id && status === "resolved" && confirm("Hide the reported seller review?"));
+      await requestAdminApi(`/admin/listings/reports/${encodeURIComponent(r.id)}/resolve`, {method:"POST",body:JSON.stringify({status,hideReview})});
+      await loadListingsAdmin();
+    }));
+    reports.append(row);
+  }
+};
+
 const bindEvents = () => {
+  getElement("loadListingsBtn")?.addEventListener("click", () => listingAdminAction(loadListingsAdmin));
   [
     "loadAuditBtn",
     "loadVideosBtn",
