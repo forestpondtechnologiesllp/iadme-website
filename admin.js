@@ -124,8 +124,8 @@ const loadAffiliateAds = async () => {
     const setup = result.cuelinksSetup || {};
     getElement("affiliateCuelinksSetup").textContent = `Backend API key: ${setup.apiConfigured ? "configured" : "missing"}. Android channel: ${setup.androidChannelId || "missing"}. iOS channel: ${setup.iosChannelId || "missing"}.`;
     getElement("affiliateAmazonImageStatus").textContent = result.amazonImagesConfigured
-      ? "Amazon Creators API credentials are configured. Authorized product images may appear in comment cards when returned. Video overlays remain paused."
-      : "Amazon Creators API credentials are missing. Amazon text link cards can still appear in comments with a neutral link icon; video overlays remain paused.";
+      ? "Amazon Creators API credentials are configured. Authorized product images may appear in comment cards when returned. Reel Shop products use the separate panel above."
+      : "Amazon Creators API credentials are missing. Amazon text link cards can still appear in comments with a neutral link icon; reel Shop products use the separate panel above.";
     affiliateLoadedTarget = target;
     affiliateEnvironment = result.environment;
     editor.disabled = false;

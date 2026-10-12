@@ -118,16 +118,33 @@
         </div>
       </div>
 
+      <div class="page-card" style="margin-top:24px;" id="reelShopPanel">
+        <h3>Feed &amp; Trending — Shop products</h3>
+        <p>Add your Amazon India affiliate links below. The worker prepares the primary product image. Ready products appear as a stamp-sized image with Shop underneath on videos. Products remain available for one calendar month unless marked expired or removed. Use Renew for 1 month to keep a product longer.</p>
+        <button class="button" id="loadReelShopBtn" type="button">Load / refresh products</button>
+        <p id="reelShopStatus" role="status" aria-live="polite">Load the selected environment before editing.</p>
+        <fieldset id="reelShopEditor" disabled style="border:0;padding:0;">
+          <label><input id="reelShopEnabled" type="checkbox" /> Display ready products on Feed and Trending</label>
+          <button class="button" id="saveReelShopBtn" type="button">Save display setting</button>
+          <p>Hidden, expired, blocked or incomplete products are not displayed. Changes reach active apps within five minutes.</p>
+          <label for="reelProductUrls">Affiliate product URLs — one per line, up to 20 at a time</label>
+          <textarea id="reelProductUrls" rows="5" maxlength="41000" placeholder="https://www.amazon.in/dp/PRODUCT_ID?tag=iadmeapp-21" style="display:block;width:100%;box-sizing:border-box;padding:10px;margin:10px 0;"></textarea>
+          <button class="button" id="queueReelProductsBtn" type="button">Prepare products</button>
+          <p>Use your SiteStripe short links or product links with tag iadmeapp-21. Products are prepared one at a time; larger batches take several minutes. Refresh this list to check progress. Amazon may prevent image fetching; blocked products remain hidden. Use product imagery you are permitted to display.</p>
+          <div id="reelShopRows" style="display:grid;gap:12px;margin-top:16px;"></div>
+        </fieldset>
+      </div>
+
       <div class="page-card" style="margin-top:24px;" id="affiliateAdsPanel">
         <h3>Affiliate comment ads</h3>
-        <p>Comments show labelled affiliate link previews. Amazon SiteStripe links can appear as text cards without product photos; a neutral link icon is used until an authorized image is available. Video affiliate overlays are paused. Do not paste scraped image URLs or prices. Amazon links open unchanged. Eligible CueLinks V3 deals may appear as text cards after campaign approval and enablement.</p>
+        <p>Legacy comment-link inventory. Manage video Shop products in the Feed &amp; Trending panel above. Amazon links open unchanged. Eligible CueLinks deals require campaign approval and enablement.</p>
         <p>CueLinks deals are fetched server-side only for selected, accessible campaigns that explicitly permit the current app platform, Native Ads, and Deals. Your API key stays on the backend.</p>
         <button class="button" id="loadAffiliateAdsBtn" type="button">Load affiliate inventory</button>
         <p id="affiliateAdsStatus" role="status" aria-live="polite">Load the selected environment before editing.</p>
         <p id="affiliateAmazonImageStatus" role="status" aria-live="polite"></p>
         <fieldset id="affiliateAdsEditor" disabled style="border:0;padding:0;">
           <label><input id="affiliateAdsEnabled" type="checkbox" /> Enable affiliate ads in this environment</label>
-          <p>Off hides comment affiliate placements. Video affiliate overlays remain paused. Changes reach active apps within about five minutes.</p>
+          <p>This setting controls legacy comment inventory. Use the separate Shop display setting above for Feed and Trending.</p>
           <div id="affiliateOfferRows" style="display:grid;gap:12px;margin:16px 0;"></div>
           <button class="button" id="addAffiliateOfferBtn" type="button">Add Amazon link</button>
           <div style="margin:18px 0;padding:12px;border:1px solid #cbd5e1;border-radius:10px;">
@@ -703,5 +720,6 @@
   </main>
 
   <script src="admin.js"></script>
+  <script src="reel-shop-admin.js"></script>
 </body>
 </html>
